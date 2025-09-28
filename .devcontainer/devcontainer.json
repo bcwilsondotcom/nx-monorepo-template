@@ -11,45 +11,117 @@
 	"runArgs": ["--platform", "linux/amd64"],
 
 	// DevContainer Features - Installing all tools with latest versions
+	// These features provide the core development tools and utilities needed for
+	// a modern full-stack monorepo development environment
 	"features": {
-		// Node.js with PNPM - Using latest versions
-		"ghcr.io/devcontainers/features/node:1": {
-			"version": "latest",
-			"nodeGypDependencies": true,
-			"pnpmVersion": "latest",
-			"installYarnVersion": "none"
-		},
+		// Node.js runtime - Essential for JavaScript/TypeScript development
+		// Includes npm and common build tools. PNPM is configured separately
+		"ghcr.io/devcontainers/features/node:1": {},
 		
-		// NX - Powerful build system with monorepo support
-		"ghcr.io/devcontainers-extra/features/nx-npm:1": {
-			"version": "latest"
-		},
+		// NX - Enterprise-grade monorepo build system
+		// Provides intelligent build caching, distributed task execution, and dependency graph visualization
+		// Essential for managing multiple apps/libs in a single repository
+		"ghcr.io/devcontainers-extra/features/nx-npm:1": {},
 		
-		// GitHub Actions linter - Validate workflow files
-		"ghcr.io/devcontainers-extra/features/actionlint:1": {
-			"version": "latest"
-		},
+		// ActionLint - GitHub Actions workflow validator
+		// Catches errors in workflow files before committing, preventing CI/CD failures
+		// Validates syntax, checks for deprecated actions, and detects common mistakes
+		"ghcr.io/devcontainers-extra/features/actionlint:1": {},
 		
-		// AWS CLI - For AWS services and LocalStack interaction
+		// AWS CLI - Command-line interface for Amazon Web Services
+		// Used for deploying to AWS, managing resources, and testing with LocalStack
+		// Essential for cloud deployments and infrastructure management
 		"ghcr.io/devcontainers/features/aws-cli:1": {},
 		
-		// Docker-outside-of-docker - Access host Docker daemon
+		// Docker-outside-of-docker - Reuses host Docker daemon
+		// Enables building and running containers without Docker-in-Docker overhead
+		// Critical for container builds, docker-compose, and LocalStack
 		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
 		
-		// GitHub CLI - For GitHub Actions and PR management
+		// GitHub CLI - Command-line tool for GitHub operations
+		// Enables PR creation, issue management, and workflow triggering from terminal
+		// Streamlines git workflow without leaving the development environment
 		"ghcr.io/devcontainers/features/github-cli:1": {},
+		
+		// Python - Required for many build tools and AWS CLI
+		// Provides Python runtime and pip package manager
+		// Needed for LocalStack, various linters, and automation scripts
 		"ghcr.io/devcontainers/features/python:1": {},
+		
+		// Terraform - Infrastructure as Code tool
+		// Enables declarative cloud resource provisioning
+		// Works with AWS, LocalStack, and other cloud providers
 		"ghcr.io/devcontainers/features/terraform:1": {},
+		
+		// Act - Run GitHub Actions locally
+		// Test CI/CD workflows without pushing to GitHub
+		// Saves time and provides faster feedback on workflow changes
 		"ghcr.io/dhoeric/features/act:1": {},
+		
+		// TypeScript - Global TypeScript compiler
+		// Provides type checking and transpilation for TypeScript projects
+		// Essential for type-safe JavaScript development
 		"ghcr.io/devcontainers-community/npm-features/typescript:1": {},
+		
+		// LocalStack CLI - Local AWS cloud emulator
+		// Test AWS services locally without incurring costs
+		// Provides S3, Lambda, DynamoDB, and more services locally
 		"ghcr.io/localstack/devcontainer-feature/localstack-cli:0": {},
+		
+		// Datadog CI CLI - Monitoring and observability tool
+		// Upload test results, deploy markers, and manage synthetic tests
+		// Integrates monitoring into CI/CD pipeline
 		"ghcr.io/devcontainers-extra/features/datadog-ci-cli:1": {},
+		
+		// DevContainers CLI - Build and manage dev containers
+		// Test devcontainer configurations without restarting VS Code
+		// Useful for debugging container setup issues
 		"ghcr.io/devcontainers-extra/features/devcontainers-cli:1": {},
+		
+		// K6 - Modern load testing tool
+		// Write performance tests in JavaScript
+		// Essential for API performance testing and load simulation
 		"ghcr.io/grafana/devcontainer-features/k6:1": {},
+		
+		// Make - Classic build automation tool
+		// Provides consistent command interface for complex tasks
+		// Useful for defining project-wide commands and workflows
 		"ghcr.io/jungaretti/features/make:1": {},
 		
-		// PostgreSQL client tools
-		"ghcr.io/warrenbuckley/codespace-features/postgres-client:1": {}
+		// Redis Server - In-memory data store
+		// Provides Redis server and CLI tools for caching and session management
+		// Essential for testing Redis-dependent features locally
+		"ghcr.io/itsmechlark/features/redis-server:1": {},
+		
+		// Trivy - Comprehensive vulnerability scanner
+		// Scans containers, filesystems, and git repos for security issues
+		// Detects vulnerabilities in OS packages and application dependencies
+		"ghcr.io/dhoeric/features/trivy:1": {},
+		
+		// PostgreSQL Client - Database management tools
+		// Includes psql CLI and other PostgreSQL utilities
+		// Essential for database operations and migrations
+		"ghcr.io/robbert229/devcontainer-features/postgresql-client:1": {},
+		
+		// Prisma - Modern database ORM and migration tool
+		// Type-safe database access with auto-generated client
+		// Handles database schemas, migrations, and seeding
+		"ghcr.io/devcontainers-extra/features/prisma:2": {},
+		
+		// Snyk CLI - Security vulnerability scanning
+		// Finds and fixes vulnerabilities in dependencies and containers
+		// Provides actionable security insights and remediation
+		"ghcr.io/devcontainers-extra/features/snyk-cli:1": {},
+		
+		// Kubernetes Tools - Container orchestration management
+		// kubectl: CLI for Kubernetes cluster operations
+		// helm: Package manager for Kubernetes applications
+		// Essential for deploying and managing containerized applications
+		"ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {
+			"kubectl": "latest",
+			"helm": "latest",
+			"minikube": "none"  // Excluded as we use remote clusters
+		}
 	},
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
@@ -77,11 +149,14 @@
 				// Code quality and formatting
 				"dbaeumer.vscode-eslint",
 				"esbenp.prettier-vscode",
+				"SonarSource.sonarlint-vscode",
 
 				// API Development - OpenAPI & AsyncAPI
 				"42Crunch.vscode-openapi",
 				"asyncapi.asyncapi-preview",
 				"Redocly.openapi-vs-code",
+				"Postman.postman-for-vscode",
+				"Arjun.swagger-viewer",
 				"streetsidesoftware.code-spell-checker",
 
 				// GitHub integration
@@ -159,54 +234,71 @@
 	// "remoteUser": "root"
 
 	// User to run as in the container
+	// Using 'vscode' user instead of root for security best practices
+	// This user has sudo privileges when needed but runs unprivileged by default
 	"remoteUser": "vscode",
 
 	// Environment variables available in the container
+	// These variables are automatically set when the container starts
 	"remoteEnv": {
-		// LocalStack configuration
+		// LocalStack configuration - Points AWS SDK to local emulator
+		// These credentials are dummy values for LocalStack (not real AWS)
 		"LOCALSTACK_HOST": "localhost",
-		"AWS_ENDPOINT_URL": "http://localhost:4566",
-		"AWS_ACCESS_KEY_ID": "test",
-		"AWS_SECRET_ACCESS_KEY": "test",
+		"AWS_ENDPOINT_URL": "http://localhost:4566",  // LocalStack endpoint
+		"AWS_ACCESS_KEY_ID": "test",  // Dummy key for LocalStack
+		"AWS_SECRET_ACCESS_KEY": "test",  // Dummy secret for LocalStack
 		"AWS_DEFAULT_REGION": "us-east-1",
 
-		// Node.js settings for better performance
+		// Node.js memory configuration
+		// Increases heap size to 4GB to prevent out-of-memory errors during builds
 		"NODE_OPTIONS": "--max-old-space-size=4096",
 
-		// PNPM settings
+		// PNPM configuration
+		// Sets PNPM home directory for global package installations
 		"PNPM_HOME": "/home/vscode/.local/share/pnpm",
 
-		// Development environment indicator
+		// Development environment indicators
+		// Used by applications to enable dev-specific features and verbose logging
 		"ENVIRONMENT": "development",
-		"DEBUG": "true"
+		"DEBUG": "true"  // Enables debug output in many tools
 	},
 
-	// Mount points for persistent data
+	// Mount points for persistent data and Docker access
+	// Volumes persist data between container rebuilds, improving performance
 	"mounts": [
-		// Docker socket for Docker-outside-of-docker
+		// Docker socket binding - Allows container to use host's Docker daemon
+		// Required for building images and running docker-compose
 		"source=/var/run/docker.sock,target=/var/run/docker-host.sock,type=bind",
 		
-		// LocalStack persistent data - using named volume to avoid bind mount issues
+		// LocalStack data persistence - Preserves local AWS service data
+		// Keeps S3 buckets, DynamoDB tables, etc. between container restarts
 		"source=localstack-data,target=/var/lib/localstack,type=volume",
 
-		// PNPM store for faster installs
+		// PNPM package store - Caches downloaded packages
+		// Dramatically speeds up npm installs after first run
 		"source=pnpm-store,target=/home/vscode/.local/share/pnpm/store,type=volume",
 
-		// NX cache
+		// NX build cache - Stores computation results
+		// Enables instant rebuilds for unchanged code
 		"source=nx-cache,target=${containerWorkspaceFolder}/.nx,type=volume"
 	],
 
-	// Container capabilities
+	// Container security capabilities
+	// SYS_PTRACE: Required for debugging tools to attach to processes
 	"capAdd": ["SYS_PTRACE"],
+	// Disables seccomp filter for compatibility with debugging tools
 	"securityOpt": ["seccomp=unconfined"],
 
-	// Update content command - runs on rebuild
+	// Update content command - Runs when rebuilding the container
+	// Ensures dependencies stay in sync with package.json changes
+	// Tries frozen lockfile first for reproducible builds, falls back if needed
 	"updateContentCommand": "pnpm install --frozen-lockfile 2>/dev/null || pnpm install",
 
-	// Features specific to this development environment
+	// Minimum host requirements for optimal performance
+	// These ensure the container has enough resources for building large monorepos
 	"hostRequirements": {
-		"cpus": 4,
-		"memory": "8gb",
-		"storage": "32gb"
+		"cpus": 4,  // Minimum CPU cores for parallel builds
+		"memory": "8gb",  // RAM needed for Node, Docker, and build processes
+		"storage": "32gb"  // Space for code, dependencies, and Docker images
 	}
 }
