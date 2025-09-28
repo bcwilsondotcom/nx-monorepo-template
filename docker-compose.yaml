@@ -4,7 +4,7 @@ services:
     ports:
       - "4566:4566"
     environment:
-      - SERVICES=eventbridge,sqs,sns,iam,lambda,s3,cloudwatch
+      - SERVICES=eventbridge,sqs,sns,iam,lambda,s3,cloudwatch,cloudfront,ecs,eks
       - DEBUG=0
       - AWS_DEFAULT_REGION=us-west-2
     volumes:

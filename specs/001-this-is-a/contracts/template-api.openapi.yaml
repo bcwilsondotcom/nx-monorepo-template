@@ -1,0 +1,443 @@
+openapi: 3.1.0
+info:
+  title: NX Template Management API
+  description: API for managing NX monorepo template operations
+  version: 1.0.0
+  contact:
+    name: Template Team
+    email: template@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development
+  - url: https://api.template.example.com/v1
+    description: Production
+
+paths:
+  /projects:
+    get:
+      summary: List all projects in the monorepo
+      operationId: listProjects
+      tags:
+        - Projects
+      parameters:
+        - name: type
+          in: query
+          description: Filter by project type
+          required: false
+          schema:
+            type: string
+            enum: [application, library]
+        - name: tags
+          in: query
+          description: Filter by tags (comma-separated)
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  projects:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Project'
+                  total:
+                    type: integer
+                    description: Total number of projects
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      summary: Create a new project
+      operationId: createProject
+      tags:
+        - Projects
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRequest'
+      responses:
+        '201':
+          description: Project created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{projectName}:
+    get:
+      summary: Get project details
+      operationId: getProject
+      tags:
+        - Projects
+      parameters:
+        - name: projectName
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9-]+$'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /specifications:
+    get:
+      summary: List API specifications
+      operationId: listSpecifications
+      tags:
+        - Specifications
+      parameters:
+        - name: type
+          in: query
+          description: Filter by specification type
+          required: false
+          schema:
+            type: string
+            enum: [openapi, asyncapi]
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  specifications:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Specification'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /specifications/generate:
+    post:
+      summary: Generate code from specifications
+      operationId: generateCode
+      tags:
+        - Specifications
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateCodeRequest'
+      responses:
+        '202':
+          description: Generation started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [pending, processing, completed, failed]
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /build:
+    post:
+      summary: Trigger build for projects
+      operationId: buildProjects
+      tags:
+        - Build
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BuildRequest'
+      responses:
+        '202':
+          description: Build started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  buildId:
+                    type: string
+                    format: uuid
+                  affectedProjects:
+                    type: array
+                    items:
+                      type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /health:
+    get:
+      summary: Health check endpoint
+      operationId: healthCheck
+      tags:
+        - System
+      responses:
+        '200':
+          description: System is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy, degraded, unhealthy]
+                  version:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+                  services:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      properties:
+                        status:
+                          type: string
+                        message:
+                          type: string
+
+components:
+  schemas:
+    Project:
+      type: object
+      required:
+        - name
+        - type
+        - sourceRoot
+        - projectType
+      properties:
+        name:
+          type: string
+          pattern: '^[a-z0-9-]+$'
+        type:
+          type: string
+          enum: [application, library]
+        sourceRoot:
+          type: string
+        projectType:
+          type: string
+          enum: [rest-api, event-handler, web-app, cli, library]
+        tags:
+          type: array
+          items:
+            type: string
+        targets:
+          type: object
+          additionalProperties:
+            type: object
+        dependencies:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateProjectRequest:
+      type: object
+      required:
+        - name
+        - type
+        - projectType
+      properties:
+        name:
+          type: string
+          pattern: '^[a-z0-9-]+$'
+        type:
+          type: string
+          enum: [application, library]
+        projectType:
+          type: string
+          enum: [rest-api, event-handler, web-app, cli, library]
+        tags:
+          type: array
+          items:
+            type: string
+        template:
+          type: string
+          description: Template to use for project generation
+
+    Specification:
+      type: object
+      required:
+        - type
+        - version
+        - filePath
+      properties:
+        type:
+          type: string
+          enum: [openapi, asyncapi]
+        version:
+          type: string
+        filePath:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        generatedArtifacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/GeneratedArtifact'
+
+    GeneratedArtifact:
+      type: object
+      required:
+        - type
+        - language
+        - outputPath
+      properties:
+        type:
+          type: string
+          enum: [client, server, types, docs]
+        language:
+          type: string
+          enum: [typescript, python]
+        outputPath:
+          type: string
+        generator:
+          type: string
+        generatedAt:
+          type: string
+          format: date-time
+
+    GenerateCodeRequest:
+      type: object
+      required:
+        - specificationPath
+        - generators
+      properties:
+        specificationPath:
+          type: string
+        generators:
+          type: array
+          items:
+            type: object
+            required:
+              - type
+              - language
+            properties:
+              type:
+                type: string
+                enum: [client, server, types, docs]
+              language:
+                type: string
+                enum: [typescript, python]
+              outputPath:
+                type: string
+
+    BuildRequest:
+      type: object
+      required:
+        - target
+      properties:
+        target:
+          type: string
+          description: Build target (e.g., build, test, lint)
+        projects:
+          type: array
+          items:
+            type: string
+          description: Specific projects to build (empty for all)
+        parallel:
+          type: boolean
+          default: true
+        cache:
+          type: boolean
+          default: true
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+        timestamp:
+          type: string
+          format: date-time
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Conflict:
+      description: Resource conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  securitySchemes:
+    ApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - ApiKey: []
+  - BearerAuth: []

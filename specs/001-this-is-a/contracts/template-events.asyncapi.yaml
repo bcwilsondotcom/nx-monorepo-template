@@ -1,0 +1,521 @@
+asyncapi: 2.6.0
+info:
+  title: NX Template Event Bus
+  version: 1.0.0
+  description: Event-driven architecture for NX monorepo template using AWS EventBridge
+  contact:
+    name: Template Team
+    email: template@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+defaultContentType: application/json
+
+servers:
+  local:
+    url: localhost:4566
+    protocol: eventbridge
+    description: LocalStack EventBridge emulation
+  production:
+    url: events.template.example.com
+    protocol: eventbridge
+    description: Production EventBridge
+
+channels:
+  project.created:
+    description: Event fired when a new project is created
+    publish:
+      operationId: publishProjectCreated
+      summary: Publish project created event
+      message:
+        $ref: '#/components/messages/ProjectCreated'
+    subscribe:
+      operationId: handleProjectCreated
+      summary: Handle project created event
+      message:
+        $ref: '#/components/messages/ProjectCreated'
+
+  project.updated:
+    description: Event fired when a project is updated
+    publish:
+      operationId: publishProjectUpdated
+      summary: Publish project updated event
+      message:
+        $ref: '#/components/messages/ProjectUpdated'
+    subscribe:
+      operationId: handleProjectUpdated
+      summary: Handle project updated event
+      message:
+        $ref: '#/components/messages/ProjectUpdated'
+
+  project.deleted:
+    description: Event fired when a project is deleted
+    publish:
+      operationId: publishProjectDeleted
+      summary: Publish project deleted event
+      message:
+        $ref: '#/components/messages/ProjectDeleted'
+    subscribe:
+      operationId: handleProjectDeleted
+      summary: Handle project deleted event
+      message:
+        $ref: '#/components/messages/ProjectDeleted'
+
+  build.started:
+    description: Event fired when a build process starts
+    publish:
+      operationId: publishBuildStarted
+      summary: Publish build started event
+      message:
+        $ref: '#/components/messages/BuildStarted'
+    subscribe:
+      operationId: handleBuildStarted
+      summary: Handle build started event
+      message:
+        $ref: '#/components/messages/BuildStarted'
+
+  build.completed:
+    description: Event fired when a build process completes
+    publish:
+      operationId: publishBuildCompleted
+      summary: Publish build completed event
+      message:
+        $ref: '#/components/messages/BuildCompleted'
+    subscribe:
+      operationId: handleBuildCompleted
+      summary: Handle build completed event
+      message:
+        $ref: '#/components/messages/BuildCompleted'
+
+  build.failed:
+    description: Event fired when a build process fails
+    publish:
+      operationId: publishBuildFailed
+      summary: Publish build failed event
+      message:
+        $ref: '#/components/messages/BuildFailed'
+    subscribe:
+      operationId: handleBuildFailed
+      summary: Handle build failed event
+      message:
+        $ref: '#/components/messages/BuildFailed'
+
+  specification.generated:
+    description: Event fired when code is generated from specification
+    publish:
+      operationId: publishSpecificationGenerated
+      summary: Publish specification generated event
+      message:
+        $ref: '#/components/messages/SpecificationGenerated'
+    subscribe:
+      operationId: handleSpecificationGenerated
+      summary: Handle specification generated event
+      message:
+        $ref: '#/components/messages/SpecificationGenerated'
+
+  deployment.triggered:
+    description: Event fired when deployment is triggered
+    publish:
+      operationId: publishDeploymentTriggered
+      summary: Publish deployment triggered event
+      message:
+        $ref: '#/components/messages/DeploymentTriggered'
+    subscribe:
+      operationId: handleDeploymentTriggered
+      summary: Handle deployment triggered event
+      message:
+        $ref: '#/components/messages/DeploymentTriggered'
+
+  deployment.completed:
+    description: Event fired when deployment completes
+    publish:
+      operationId: publishDeploymentCompleted
+      summary: Publish deployment completed event
+      message:
+        $ref: '#/components/messages/DeploymentCompleted'
+    subscribe:
+      operationId: handleDeploymentCompleted
+      summary: Handle deployment completed event
+      message:
+        $ref: '#/components/messages/DeploymentCompleted'
+
+components:
+  messages:
+    ProjectCreated:
+      name: ProjectCreated
+      title: Project Created Event
+      summary: A new project has been created in the monorepo
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/EventMetadata'
+      payload:
+        $ref: '#/components/schemas/ProjectCreatedPayload'
+
+    ProjectUpdated:
+      name: ProjectUpdated
+      title: Project Updated Event
+      summary: An existing project has been updated
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/EventMetadata'
+      payload:
+        $ref: '#/components/schemas/ProjectUpdatedPayload'
+
+    ProjectDeleted:
+      name: ProjectDeleted
+      title: Project Deleted Event
+      summary: A project has been deleted from the monorepo
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/EventMetadata'
+      payload:
+        $ref: '#/components/schemas/ProjectDeletedPayload'
+
+    BuildStarted:
+      name: BuildStarted
+      title: Build Started Event
+      summary: Build process has started
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/EventMetadata'
+      payload:
+        $ref: '#/components/schemas/BuildStartedPayload'
+
+    BuildCompleted:
+      name: BuildCompleted
+      title: Build Completed Event
+      summary: Build process has completed successfully
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/EventMetadata'
+      payload:
+        $ref: '#/components/schemas/BuildCompletedPayload'
+
+    BuildFailed:
+      name: BuildFailed
+      title: Build Failed Event
+      summary: Build process has failed
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/EventMetadata'
+      payload:
+        $ref: '#/components/schemas/BuildFailedPayload'
+
+    SpecificationGenerated:
+      name: SpecificationGenerated
+      title: Specification Generated Event
+      summary: Code has been generated from specification
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/EventMetadata'
+      payload:
+        $ref: '#/components/schemas/SpecificationGeneratedPayload'
+
+    DeploymentTriggered:
+      name: DeploymentTriggered
+      title: Deployment Triggered Event
+      summary: Deployment has been triggered
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/EventMetadata'
+      payload:
+        $ref: '#/components/schemas/DeploymentTriggeredPayload'
+
+    DeploymentCompleted:
+      name: DeploymentCompleted
+      title: Deployment Completed Event
+      summary: Deployment has completed
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/EventMetadata'
+      payload:
+        $ref: '#/components/schemas/DeploymentCompletedPayload'
+
+  schemas:
+    EventMetadata:
+      type: object
+      required:
+        - eventId
+        - eventType
+        - timestamp
+        - source
+        - version
+      properties:
+        eventId:
+          type: string
+          format: uuid
+          description: Unique event identifier
+        eventType:
+          type: string
+          description: Type of event
+        timestamp:
+          type: string
+          format: date-time
+          description: Event occurrence timestamp
+        source:
+          type: string
+          description: Source system/service
+        version:
+          type: string
+          description: Event schema version
+        correlationId:
+          type: string
+          format: uuid
+          description: Correlation ID for tracking related events
+        userId:
+          type: string
+          description: User who triggered the event
+
+    ProjectCreatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/EventMetadata'
+        - type: object
+          required:
+            - project
+          properties:
+            project:
+              $ref: '#/components/schemas/ProjectDetails'
+
+    ProjectUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/EventMetadata'
+        - type: object
+          required:
+            - project
+            - changes
+          properties:
+            project:
+              $ref: '#/components/schemas/ProjectDetails'
+            changes:
+              type: array
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                  oldValue:
+                    type: string
+                  newValue:
+                    type: string
+
+    ProjectDeletedPayload:
+      allOf:
+        - $ref: '#/components/schemas/EventMetadata'
+        - type: object
+          required:
+            - projectName
+          properties:
+            projectName:
+              type: string
+            projectType:
+              type: string
+
+    BuildStartedPayload:
+      allOf:
+        - $ref: '#/components/schemas/EventMetadata'
+        - type: object
+          required:
+            - buildId
+            - projects
+            - target
+          properties:
+            buildId:
+              type: string
+              format: uuid
+            projects:
+              type: array
+              items:
+                type: string
+            target:
+              type: string
+            parallel:
+              type: boolean
+            cache:
+              type: boolean
+
+    BuildCompletedPayload:
+      allOf:
+        - $ref: '#/components/schemas/EventMetadata'
+        - type: object
+          required:
+            - buildId
+            - duration
+            - artifacts
+          properties:
+            buildId:
+              type: string
+              format: uuid
+            duration:
+              type: integer
+              description: Build duration in milliseconds
+            artifacts:
+              type: array
+              items:
+                type: object
+                properties:
+                  project:
+                    type: string
+                  path:
+                    type: string
+                  size:
+                    type: integer
+            cacheHits:
+              type: integer
+            cacheMisses:
+              type: integer
+
+    BuildFailedPayload:
+      allOf:
+        - $ref: '#/components/schemas/EventMetadata'
+        - type: object
+          required:
+            - buildId
+            - error
+            - failedProject
+          properties:
+            buildId:
+              type: string
+              format: uuid
+            failedProject:
+              type: string
+            error:
+              type: object
+              properties:
+                message:
+                  type: string
+                stack:
+                  type: string
+                code:
+                  type: string
+
+    SpecificationGeneratedPayload:
+      allOf:
+        - $ref: '#/components/schemas/EventMetadata'
+        - type: object
+          required:
+            - specification
+            - artifacts
+          properties:
+            specification:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: [openapi, asyncapi]
+                path:
+                  type: string
+                version:
+                  type: string
+            artifacts:
+              type: array
+              items:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    enum: [client, server, types, docs]
+                  language:
+                    type: string
+                  outputPath:
+                    type: string
+                  generator:
+                    type: string
+
+    DeploymentTriggeredPayload:
+      allOf:
+        - $ref: '#/components/schemas/EventMetadata'
+        - type: object
+          required:
+            - deploymentId
+            - environment
+            - projects
+          properties:
+            deploymentId:
+              type: string
+              format: uuid
+            environment:
+              type: string
+              enum: [development, staging, production]
+            projects:
+              type: array
+              items:
+                type: string
+            strategy:
+              type: string
+              enum: [rolling, blueGreen, canary]
+            autoRollback:
+              type: boolean
+
+    DeploymentCompletedPayload:
+      allOf:
+        - $ref: '#/components/schemas/EventMetadata'
+        - type: object
+          required:
+            - deploymentId
+            - environment
+            - status
+            - duration
+          properties:
+            deploymentId:
+              type: string
+              format: uuid
+            environment:
+              type: string
+            status:
+              type: string
+              enum: [success, failed, rolledBack]
+            duration:
+              type: integer
+              description: Deployment duration in milliseconds
+            deployedProjects:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  version:
+                    type: string
+                  url:
+                    type: string
+
+    ProjectDetails:
+      type: object
+      required:
+        - name
+        - type
+        - projectType
+        - sourceRoot
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [application, library]
+        projectType:
+          type: string
+          enum: [rest-api, event-handler, web-app, cli, library]
+        sourceRoot:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        dependencies:
+          type: array
+          items:
+            type: string
+
+  messageTraits:
+    EventMetadata:
+      headers:
+        type: object
+        properties:
+          x-correlation-id:
+            type: string
+            format: uuid
+          x-event-version:
+            type: string
+          x-source-service:
+            type: string
