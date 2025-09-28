@@ -1,0 +1,12 @@
+services:
+  localstack:
+    image: localstack/localstack:stable
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=eventbridge,sqs,sns,iam,lambda,s3,cloudwatch
+      - DEBUG=0
+      - AWS_DEFAULT_REGION=us-west-2
+    volumes:
+      - "./.localstack:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"

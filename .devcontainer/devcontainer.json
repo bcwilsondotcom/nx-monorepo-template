@@ -1,0 +1,123 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/ubuntu
+{
+	"name": "NX Monorepo Template - Spec-Driven Development",
+
+	// Base image - Ubuntu Noble (24.04 LTS) with dev tools
+	// Using linux/amd64 platform for better compatibility with some tools on Apple Silicon
+	"image": "mcr.microsoft.com/devcontainers/base:noble",
+
+	// Platform specification for Apple Silicon Macs (M1/M2/M3)
+	"runArgs": ["--platform", "linux/amd64"],
+
+	// DevContainer Features - Installing all tools with latest versions
+	"features": {
+		// Node.js with PNPM - Using latest versions
+		"ghcr.io/devcontainers/features/node:1": {
+			"version": "latest",
+			"nodeGypDependencies": true,
+			"pnpmVersion": "latest",
+			"installYarnVersion": "none"
+		},
+		
+		// NX - Powerful build system with monorepo support
+		"ghcr.io/devcontainers-extra/features/nx-npm:1": {
+			"version": "latest"
+		},
+		
+		// GitHub Actions linter - Validate workflow files
+		"ghcr.io/devcontainers-extra/features/actionlint:1": {
+			"version": "latest"
+		},
+		
+		// AWS CLI - For AWS services and LocalStack interaction
+		"ghcr.io/devcontainers/features/aws-cli:1": {},
+		
+		// Docker-outside-of-docker - Access host Docker daemon
+		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
+		
+		// GitHub CLI - For GitHub Actions and PR management
+		"ghcr.io/devcontainers/features/github-cli:1": {},
+		"ghcr.io/devcontainers/features/python:1": {},
+		"ghcr.io/devcontainers/features/terraform:1": {},
+		"ghcr.io/dhoeric/features/act:1": {},
+		"ghcr.io/devcontainers-community/npm-features/typescript:1": {},
+		"ghcr.io/localstack/devcontainer-feature/localstack-cli:0": {},
+		"ghcr.io/devcontainers-extra/features/datadog-ci-cli:1": {},
+		"ghcr.io/devcontainers-extra/features/devcontainers-cli:1": {},
+		"ghcr.io/grafana/devcontainer-features/k6:1": {},
+		"ghcr.io/jungaretti/features/make:1": {},
+	},
+
+	// Features to add to the dev container. More info: https://containers.dev/features.
+	// "features": {},
+
+	// Ports to forward from container to host
+	// 4566: LocalStack main endpoint
+	// 4571: LocalStack Edge Service (legacy)
+	// 3000-3010: Common development server ports
+	// 8080-8090: API server ports
+	"forwardPorts": [3000, 3001, 3002, 3003, 4566, 4571, 8080, 8081, 8082],
+
+	// Commands to run after container is created
+	// Install dependencies and initialize NX workspace if needed
+	"postCreateCommand": "pnpm install --frozen-lockfile 2>/dev/null || pnpm install && npx nx@latest init --interactive false 2>/dev/null || true",
+
+	// Configure tool-specific properties.
+	// "customizations": {},
+
+	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+	// "remoteUser": "root"
+
+	// User to run as in the container
+	"remoteUser": "vscode",
+
+	// Environment variables available in the container
+	"remoteEnv": {
+		// LocalStack configuration
+		"LOCALSTACK_HOST": "localhost",
+		"AWS_ENDPOINT_URL": "http://localhost:4566",
+		"AWS_ACCESS_KEY_ID": "test",
+		"AWS_SECRET_ACCESS_KEY": "test",
+		"AWS_DEFAULT_REGION": "us-east-1",
+
+		// Node.js settings for better performance
+		"NODE_OPTIONS": "--max-old-space-size=4096",
+
+		// PNPM settings
+		"PNPM_HOME": "/home/vscode/.local/share/pnpm",
+
+		// Development environment indicator
+		"ENVIRONMENT": "development",
+		"DEBUG": "true"
+	},
+
+	// Mount points for persistent data
+	"mounts": [
+		// Docker socket for Docker-outside-of-docker
+		"source=/var/run/docker.sock,target=/var/run/docker-host.sock,type=bind",
+		
+		// LocalStack persistent data - using named volume to avoid bind mount issues
+		"source=localstack-data,target=/var/lib/localstack,type=volume",
+
+		// PNPM store for faster installs
+		"source=pnpm-store,target=/home/vscode/.local/share/pnpm/store,type=volume",
+
+		// NX cache
+		"source=nx-cache,target=${containerWorkspaceFolder}/.nx,type=volume"
+	],
+
+	// Container capabilities
+	"capAdd": ["SYS_PTRACE"],
+	"securityOpt": ["seccomp=unconfined"],
+
+	// Update content command - runs on rebuild
+	"updateContentCommand": "pnpm install --frozen-lockfile 2>/dev/null || pnpm install",
+
+	// Features specific to this development environment
+	"hostRequirements": {
+		"cpus": 4,
+		"memory": "8gb",
+		"storage": "32gb"
+	}
+}

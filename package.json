@@ -1,0 +1,25 @@
+{
+  "name": "spec-driven-nx-template",
+  "private": true,
+  "packageManager": "pnpm@9",
+  "scripts": {
+    "nx:init": "pnpm dlx nx@latest init --nxCloud=false --pm=pnpm",
+    "gen:openapi": "tsx scripts/gen-openapi.ts",
+    "gen:asyncapi": "tsx scripts/gen-asyncapi.ts",
+    "spec:plan": "spec-kit plan",
+    "spec:openapi": "spec-kit openapi",
+    "spec:asyncapi": "spec-kit asyncapi",
+    "codegen": "pnpm spec:plan && pnpm spec:openapi && pnpm spec:asyncapi && pnpm gen:openapi && pnpm gen:asyncapi",
+    "local:up": "docker compose up -d localstack",
+    "local:down": "docker compose down",
+    "local:bootstrap": "scripts/local/bootstrap-localstack.sh",
+    "lint": "nx run-many -t lint",
+    "test": "nx run-many -t test",
+    "build": "nx run-many -t build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.4",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3"
+  }
+}
