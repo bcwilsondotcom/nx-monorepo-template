@@ -47,6 +47,9 @@
 		"ghcr.io/devcontainers-extra/features/devcontainers-cli:1": {},
 		"ghcr.io/grafana/devcontainer-features/k6:1": {},
 		"ghcr.io/jungaretti/features/make:1": {},
+		
+		// PostgreSQL client tools
+		"ghcr.io/warrenbuckley/codespace-features/postgres-client:1": {}
 	},
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
