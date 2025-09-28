@@ -10,6 +10,12 @@
 	// Platform specification for Apple Silicon Macs (M1/M2/M3)
 	"runArgs": ["--platform", "linux/amd64"],
 
+	"build": {
+		"options": {
+			"platform": "linux/amd64"
+		}
+	},
+
 	// DevContainer Features - Installing all tools with latest versions
 	// These features provide the core development tools and utilities needed for
 	// a modern full-stack monorepo development environment
