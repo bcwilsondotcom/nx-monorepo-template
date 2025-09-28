@@ -1,0 +1,34 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build outputs
+dist
+build
+tmp
+.nx
+
+# Generated files
+*.generated.ts
+*.generated.js
+
+# Documentation
+*.md
+docs
+
+# Config files that should not be formatted
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# IDE
+.vscode
+.idea
+
+# Git
+.git
+.gitignore
+
+# Other
+coverage
+*.log

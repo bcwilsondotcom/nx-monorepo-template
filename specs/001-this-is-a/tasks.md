@@ -44,36 +44,36 @@
 - **Tests**: `{app|package}/tests/`
 
 ## Phase 3.1: Foundation Setup
-- [ ] T001 Initialize NX workspace with pnpm in repository root
-- [ ] T002 Configure nx.json with caching, task runners, and target defaults
-- [ ] T003 [P] Setup pnpm-workspace.yaml for monorepo package management
-- [ ] T004 [P] Create .gitignore with NX, Node.js, and IDE patterns
-- [ ] T005 [P] Configure TypeScript base configuration in tsconfig.base.json
-- [ ] T006 [P] Setup ESLint configuration with TypeScript rules in .eslintrc.json
-- [ ] T007 [P] Configure Prettier formatting in .prettierrc
+- [x] T001 Initialize NX workspace with pnpm in repository root
+- [x] T002 Configure nx.json with caching, task runners, and target defaults
+- [x] T003 [P] Setup pnpm-workspace.yaml for monorepo package management
+- [x] T004 [P] Create .gitignore with NX, Node.js, and IDE patterns
+- [x] T005 [P] Configure TypeScript base configuration in tsconfig.base.json
+- [x] T006 [P] Setup ESLint configuration with TypeScript rules in .eslintrc.json
+- [x] T007 [P] Configure Prettier formatting in .prettierrc
 
 ## Phase 3.2: DevContainer & Local Environment
-- [ ] T008 Create .devcontainer/devcontainer.json with Node.js 24, pnpm, and tools
-- [ ] T009 [P] Create .devcontainer/Dockerfile with development dependencies
-- [ ] T010 [P] Setup docker-compose.yaml for LocalStack AWS emulation
-- [ ] T011 [P] Create .devcontainer/postcreatecommand.sh for workspace setup
-- [ ] T012 [P] Configure VS Code extensions in .devcontainer/devcontainer.json
-- [ ] T013 Create LocalStack initialization scripts in .localstack/init/
+- [x] T008 Create .devcontainer/devcontainer.json with Node.js 24, pnpm, and tools
+- [x] T009 [P] Create .devcontainer/Dockerfile with development dependencies
+- [x] T010 [P] Setup docker-compose.yaml for LocalStack AWS emulation
+- [x] T011 [P] Create .devcontainer/postcreatecommand.sh for workspace setup
+- [x] T012 [P] Configure VS Code extensions in .devcontainer/devcontainer.json
+- [x] T013 Create LocalStack initialization scripts in .localstack/init/
 
 ## Phase 3.3: Tests First (TDD) ⚠️ MUST COMPLETE BEFORE 3.4
 **CRITICAL: These tests MUST be written and MUST FAIL before ANY implementation**
 
 ### Contract Tests for REST API
-- [ ] T014 [P] Contract test GET /projects in tools/tests/contract/test_projects_list.ts
-- [ ] T015 [P] Contract test POST /projects in tools/tests/contract/test_projects_create.ts
-- [ ] T016 [P] Contract test GET /projects/{projectName} in tools/tests/contract/test_project_get.ts
+- [x] T014 [P] Contract test GET /projects in tools/tests/contract/test_projects_list.ts
+- [x] T015 [P] Contract test POST /projects in tools/tests/contract/test_projects_create.ts
+- [x] T016 [P] Contract test GET /projects/{projectName} in tools/tests/contract/test_project_get.ts
 - [ ] T017 [P] Contract test GET /specifications in tools/tests/contract/test_specifications_list.ts
 - [ ] T018 [P] Contract test POST /specifications/generate in tools/tests/contract/test_generate_code.ts
 - [ ] T019 [P] Contract test POST /build in tools/tests/contract/test_build_projects.ts
-- [ ] T020 [P] Contract test GET /health in tools/tests/contract/test_health_check.ts
+- [x] T020 [P] Contract test GET /health in tools/tests/contract/test_health_check.ts
 
 ### Contract Tests for Events
-- [ ] T021 [P] Event test project.created in tools/tests/contract/test_project_created_event.ts
+- [x] T021 [P] Event test project.created in tools/tests/contract/test_project_created_event.ts
 - [ ] T022 [P] Event test project.updated in tools/tests/contract/test_project_updated_event.ts
 - [ ] T023 [P] Event test project.deleted in tools/tests/contract/test_project_deleted_event.ts
 - [ ] T024 [P] Event test build.started in tools/tests/contract/test_build_started_event.ts
@@ -84,7 +84,7 @@
 - [ ] T029 [P] Event test deployment.completed in tools/tests/contract/test_deployment_completed_event.ts
 
 ### Integration Tests
-- [ ] T030 [P] Integration test for template initialization in tools/tests/integration/test_template_init.ts
+- [x] T030 [P] Integration test for template initialization in tools/tests/integration/test_template_init.ts
 - [ ] T031 [P] Integration test for project generation in tools/tests/integration/test_project_generation.ts
 - [ ] T032 [P] Integration test for spec-driven workflow in tools/tests/integration/test_spec_workflow.ts
 - [ ] T033 [P] Integration test for LocalStack AWS services in tools/tests/integration/test_localstack.ts
