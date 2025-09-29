@@ -1,0 +1,102 @@
+/**
+ * <%= projectName %> - Main Entry Point
+ * Generated REST API application
+ */
+
+<% if (framework === 'nestjs') { %>
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+<% if (includeOpenApi) { %>
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+<% } %>
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+
+  // Configure CORS
+  app.enableCors({
+    origin: process.env.CORS_ORIGIN || '*',
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true,
+  });
+
+  // Set global prefix
+  app.setGlobalPrefix('api/v1');
+
+  <% if (includeOpenApi) { %>
+  // Setup Swagger
+  const config = new DocumentBuilder()
+    .setTitle('<%= projectName %> API')
+    .setDescription('The <%= projectName %> API description')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document);
+  <% } %>
+
+  const port = process.env.PORT || 3000;
+  await app.listen(port);
+
+  console.log(`🚀 <%= projectName %> is running on: http://localhost:${port}/api/v1`);
+  <% if (includeOpenApi) { %>
+  console.log(`📚 API Documentation: http://localhost:${port}/api/docs`);
+  <% } %>
+}
+
+bootstrap();
+<% } else if (framework === 'express') { %>
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import bodyParser from 'body-parser';
+
+const app = express();
+const port = process.env.PORT || 3000;
+
+// Middleware
+app.use(helmet());
+app.use(cors());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// Routes
+app.get('/api/v1/health', (req, res) => {
+  res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
+
+app.listen(port, () => {
+  console.log(`🚀 <%= projectName %> is running on: http://localhost:${port}/api/v1`);
+});
+<% } else if (framework === 'fastify') { %>
+import Fastify from 'fastify';
+import cors from '@fastify/cors';
+import helmet from '@fastify/helmet';
+
+const fastify = Fastify({
+  logger: true
+});
+
+// Register plugins
+fastify.register(cors);
+fastify.register(helmet);
+
+// Routes
+fastify.get('/api/v1/health', async () => {
+  return { status: 'healthy', timestamp: new Date().toISOString() };
+});
+
+// Start server
+const start = async () => {
+  try {
+    const port = Number(process.env.PORT) || 3000;
+    await fastify.listen({ port, host: '0.0.0.0' });
+    console.log(`🚀 <%= projectName %> is running on: http://localhost:${port}/api/v1`);
+  } catch (err) {
+    fastify.log.error(err);
+    process.exit(1);
+  }
+};
+
+start();
+<% } %>

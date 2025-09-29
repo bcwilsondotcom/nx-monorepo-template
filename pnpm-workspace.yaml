@@ -1,5 +1,7 @@
 packages:
   - "apps/*"
-  - "libs/*"
+  - "packages/*"
   - "tools/*"
-  - "specs/*"
+  - "tools/generators/*"
+  - "tools/executors/*"
+  - "infrastructure/*"

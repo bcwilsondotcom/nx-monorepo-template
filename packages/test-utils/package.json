@@ -1,0 +1,30 @@
+{
+  "name": "@nx-monorepo-template/test-utils",
+  "version": "1.0.0",
+  "description": "Test utilities library for the NX monorepo template",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "jest",
+    "lint": "eslint src",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@faker-js/faker": "^8.0.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/uuid": "^9.0.0",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "@types/jest": "^29.0.0",
+    "jest": "^29.0.0"
+  }
+}

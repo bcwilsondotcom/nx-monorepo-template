@@ -5,7 +5,7 @@
     "useDefineForClassFields": false,
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "lib": ["ES2022", "DOM"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "declaration": true,
     "sourceMap": true,
     "strict": true,
@@ -14,6 +14,23 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "resolveJsonModule": true,
-    "types": ["node"]
-  }
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "types": ["node", "jest"],
+    "rootDir": ".",
+    "baseUrl": ".",
+    "paths": {
+      "@nx-monorepo-template/shared-types": ["packages/shared-types/src/index.ts"],
+      "@nx-monorepo-template/ui-components": ["packages/ui-components/src/index.ts"],
+      "@nx-monorepo-template/utils": ["packages/utils/src/index.ts"],
+      "@nx-monorepo-template/contracts": ["packages/contracts/src/index.ts"],
+      "@nx-monorepo-template/test-utils": ["packages/test-utils/src/index.ts"]
+    }
+  },
+  "exclude": ["node_modules", "tmp", "dist", ".nx"]
 }

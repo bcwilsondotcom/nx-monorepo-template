@@ -1,0 +1,2112 @@
+asyncapi: 2.6.0
+info:
+  title: Third-party Integration Events API
+  version: 1.0.0
+  description: |
+    Third-party integration events API for the NX monorepo template.
+
+    This API defines the event-driven architecture for integrating with external services
+    and platforms. It provides a unified interface for handling events from various
+    third-party providers including CRM systems, communication tools, payment processors,
+    and development tools.
+
+    ## Integration Categories
+    - **CRM Integrations**: Salesforce, HubSpot, Pipedrive
+    - **Communication**: Slack, Microsoft Teams, Discord
+    - **Payment Processing**: Stripe, PayPal, Square
+    - **Development Tools**: GitHub, GitLab, Jira, Trello
+    - **Cloud Services**: AWS, Google Cloud, Azure
+    - **Email Services**: SendGrid, Mailchimp, Postmark
+    - **Analytics**: Google Analytics, Mixpanel, Amplitude
+
+    ## Event Processing
+    - Webhook event normalization and transformation
+    - Retry mechanisms for failed integrations
+    - Rate limiting and backoff strategies
+    - Event deduplication and idempotency
+    - Integration health monitoring
+
+    ## Security
+    - Webhook signature verification
+    - OAuth token management
+    - API key rotation
+    - Audit logging for all integration events
+  contact:
+    name: Integrations Team
+    email: integrations@company.com
+    url: https://docs.company.com/integrations
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+defaultContentType: application/json
+
+servers:
+  integration-hub:
+    url: wss://integrations.company.com/v1
+    protocol: wss
+    description: Integration event hub WebSocket
+    security:
+      - bearerAuth: []
+
+  webhook-ingress:
+    url: https://webhooks.company.com/v1
+    protocol: https
+    description: Webhook ingress for third-party events
+    security:
+      - webhookSignature: []
+
+  internal-events:
+    url: amqps://events.company.com:5671
+    protocol: amqp
+    description: Internal event bus for integration events
+    security:
+      - userPassword: []
+
+channels:
+  integrations/crm/events:
+    description: CRM system integration events
+    parameters:
+      provider:
+        description: CRM provider identifier
+        schema:
+          type: string
+          enum: [salesforce, hubspot, pipedrive]
+    subscribe:
+      summary: Subscribe to CRM events
+      description: Listen for events from CRM integrations
+      operationId: subscribeCRMEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/CRMContactEvent'
+          - $ref: '#/components/messages/CRMDealEvent'
+          - $ref: '#/components/messages/CRMCompanyEvent'
+          - $ref: '#/components/messages/CRMTaskEvent'
+    publish:
+      summary: Publish CRM events
+      description: Send CRM-related events to subscribers
+      operationId: publishCRMEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/CRMContactEvent'
+          - $ref: '#/components/messages/CRMDealEvent'
+          - $ref: '#/components/messages/CRMCompanyEvent'
+          - $ref: '#/components/messages/CRMTaskEvent'
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: integrations.crm
+          type: topic
+          durable: true
+        queue:
+          name: crm.events.{provider}
+          durable: true
+
+  integrations/communication/events:
+    description: Communication platform integration events
+    parameters:
+      provider:
+        description: Communication platform provider
+        schema:
+          type: string
+          enum: [slack, teams, discord]
+    subscribe:
+      summary: Subscribe to communication events
+      description: Listen for events from communication platforms
+      operationId: subscribeCommunicationEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/ChatMessageEvent'
+          - $ref: '#/components/messages/ChannelEvent'
+          - $ref: '#/components/messages/UserMentionEvent'
+          - $ref: '#/components/messages/FileShareEvent'
+    publish:
+      summary: Publish communication events
+      description: Send communication platform events
+      operationId: publishCommunicationEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/ChatMessageEvent'
+          - $ref: '#/components/messages/ChannelEvent'
+          - $ref: '#/components/messages/UserMentionEvent'
+          - $ref: '#/components/messages/FileShareEvent'
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: integrations.communication
+          type: topic
+          durable: true
+
+  integrations/payment/events:
+    description: Payment processor integration events
+    parameters:
+      provider:
+        description: Payment processor provider
+        schema:
+          type: string
+          enum: [stripe, paypal, square]
+    subscribe:
+      summary: Subscribe to payment events
+      description: Listen for events from payment processors
+      operationId: subscribePaymentEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/PaymentSucceededEvent'
+          - $ref: '#/components/messages/PaymentFailedEvent'
+          - $ref: '#/components/messages/SubscriptionEvent'
+          - $ref: '#/components/messages/RefundEvent'
+          - $ref: '#/components/messages/ChargebackEvent'
+    publish:
+      summary: Publish payment events
+      description: Send payment processor events
+      operationId: publishPaymentEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/PaymentSucceededEvent'
+          - $ref: '#/components/messages/PaymentFailedEvent'
+          - $ref: '#/components/messages/SubscriptionEvent'
+          - $ref: '#/components/messages/RefundEvent'
+          - $ref: '#/components/messages/ChargebackEvent'
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: integrations.payment
+          type: topic
+          durable: true
+
+  integrations/devtools/events:
+    description: Development tools integration events
+    parameters:
+      provider:
+        description: Development tool provider
+        schema:
+          type: string
+          enum: [github, gitlab, jira, trello]
+    subscribe:
+      summary: Subscribe to development tool events
+      description: Listen for events from development tools
+      operationId: subscribeDevToolEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/RepositoryEvent'
+          - $ref: '#/components/messages/PullRequestEvent'
+          - $ref: '#/components/messages/IssueEvent'
+          - $ref: '#/components/messages/DeploymentEvent'
+          - $ref: '#/components/messages/JiraTicketEvent'
+    publish:
+      summary: Publish development tool events
+      description: Send development tool events
+      operationId: publishDevToolEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/RepositoryEvent'
+          - $ref: '#/components/messages/PullRequestEvent'
+          - $ref: '#/components/messages/IssueEvent'
+          - $ref: '#/components/messages/DeploymentEvent'
+          - $ref: '#/components/messages/JiraTicketEvent'
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: integrations.devtools
+          type: topic
+          durable: true
+
+  integrations/cloud/events:
+    description: Cloud service integration events
+    parameters:
+      provider:
+        description: Cloud service provider
+        schema:
+          type: string
+          enum: [aws, gcp, azure]
+    subscribe:
+      summary: Subscribe to cloud service events
+      description: Listen for events from cloud services
+      operationId: subscribeCloudEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/CloudResourceEvent'
+          - $ref: '#/components/messages/CloudBillingEvent'
+          - $ref: '#/components/messages/CloudSecurityEvent'
+          - $ref: '#/components/messages/CloudMonitoringEvent'
+    publish:
+      summary: Publish cloud service events
+      description: Send cloud service events
+      operationId: publishCloudEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/CloudResourceEvent'
+          - $ref: '#/components/messages/CloudBillingEvent'
+          - $ref: '#/components/messages/CloudSecurityEvent'
+          - $ref: '#/components/messages/CloudMonitoringEvent'
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: integrations.cloud
+          type: topic
+          durable: true
+
+  integrations/email/events:
+    description: Email service integration events
+    parameters:
+      provider:
+        description: Email service provider
+        schema:
+          type: string
+          enum: [sendgrid, mailchimp, postmark]
+    subscribe:
+      summary: Subscribe to email service events
+      description: Listen for events from email services
+      operationId: subscribeEmailEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/EmailDeliveredEvent'
+          - $ref: '#/components/messages/EmailBouncedEvent'
+          - $ref: '#/components/messages/EmailOpenedEvent'
+          - $ref: '#/components/messages/EmailClickedEvent'
+          - $ref: '#/components/messages/UnsubscribeEvent'
+    publish:
+      summary: Publish email service events
+      description: Send email service events
+      operationId: publishEmailEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/EmailDeliveredEvent'
+          - $ref: '#/components/messages/EmailBouncedEvent'
+          - $ref: '#/components/messages/EmailOpenedEvent'
+          - $ref: '#/components/messages/EmailClickedEvent'
+          - $ref: '#/components/messages/UnsubscribeEvent'
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: integrations.email
+          type: topic
+          durable: true
+
+  integrations/analytics/events:
+    description: Analytics service integration events
+    parameters:
+      provider:
+        description: Analytics service provider
+        schema:
+          type: string
+          enum: [google_analytics, mixpanel, amplitude]
+    subscribe:
+      summary: Subscribe to analytics events
+      description: Listen for events from analytics services
+      operationId: subscribeAnalyticsEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/AnalyticsGoalEvent'
+          - $ref: '#/components/messages/CohortEvent'
+          - $ref: '#/components/messages/FunnelEvent'
+          - $ref: '#/components/messages/ExperimentResultEvent'
+    publish:
+      summary: Publish analytics events
+      description: Send analytics service events
+      operationId: publishAnalyticsEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/AnalyticsGoalEvent'
+          - $ref: '#/components/messages/CohortEvent'
+          - $ref: '#/components/messages/FunnelEvent'
+          - $ref: '#/components/messages/ExperimentResultEvent'
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: integrations.analytics
+          type: topic
+          durable: true
+
+  integrations/status:
+    description: Integration health and status updates
+    subscribe:
+      summary: Subscribe to integration status
+      description: Monitor integration health and status
+      operationId: subscribeIntegrationStatus
+      message:
+        oneOf:
+          - $ref: '#/components/messages/IntegrationStatusEvent'
+          - $ref: '#/components/messages/IntegrationErrorEvent'
+          - $ref: '#/components/messages/RateLimitEvent'
+    publish:
+      summary: Publish integration status
+      description: Report integration health and status
+      operationId: publishIntegrationStatus
+      message:
+        oneOf:
+          - $ref: '#/components/messages/IntegrationStatusEvent'
+          - $ref: '#/components/messages/IntegrationErrorEvent'
+          - $ref: '#/components/messages/RateLimitEvent'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    webhookSignature:
+      type: httpApiKey
+      name: X-Webhook-Signature
+      in: header
+    userPassword:
+      type: userPassword
+
+  messageTraits:
+    integrationHeaders:
+      headers:
+        type: object
+        properties:
+          event_id:
+            type: string
+            format: uuid
+            description: Unique event identifier
+          provider:
+            type: string
+            description: Integration provider name
+          provider_event_id:
+            type: string
+            description: Provider's event identifier
+          timestamp:
+            type: string
+            format: date-time
+            description: Event timestamp
+          version:
+            type: string
+            description: Event schema version
+          correlation_id:
+            type: string
+            format: uuid
+            description: Correlation ID for tracking
+          retry_count:
+            type: integer
+            description: Number of retry attempts
+            default: 0
+          source:
+            type: string
+            description: Event source system
+        required:
+          - event_id
+          - provider
+          - timestamp
+          - version
+          - source
+
+  messages:
+    CRMContactEvent:
+      name: CRMContactEvent
+      title: CRM Contact Event
+      summary: Contact-related event from CRM system
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/CRMContactEventPayload'
+      examples:
+        - name: Contact created in Salesforce
+          summary: New contact created in Salesforce CRM
+          payload:
+            event_type: contact_created
+            contact:
+              id: 003XXXXXXXXXXXXXXX
+              first_name: John
+              last_name: Doe
+              email: john.doe@company.com
+              phone: "+1-555-123-4567"
+              company: Tech Corp
+              title: Software Engineer
+              lead_source: Website
+              tags: [qualified, decision_maker]
+            custom_fields:
+              industry: Technology
+              employee_count: 250
+              annual_revenue: 5000000
+
+    CRMDealEvent:
+      name: CRMDealEvent
+      title: CRM Deal Event
+      summary: Deal/opportunity event from CRM system
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/CRMDealEventPayload'
+      examples:
+        - name: Deal stage changed
+          summary: Deal moved to negotiation stage
+          payload:
+            event_type: deal_stage_changed
+            deal:
+              id: 006XXXXXXXXXXXXXXX
+              name: Tech Corp - Enterprise License
+              amount: 150000
+              currency: USD
+              stage: negotiation
+              probability: 75
+              close_date: "2024-03-31"
+              owner_id: 005XXXXXXXXXXXXXXX
+              account_id: 001XXXXXXXXXXXXXXX
+            previous_stage: proposal
+            stage_duration: 604800
+
+    CRMCompanyEvent:
+      name: CRMCompanyEvent
+      title: CRM Company Event
+      summary: Company/account event from CRM system
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/CRMCompanyEventPayload'
+
+    CRMTaskEvent:
+      name: CRMTaskEvent
+      title: CRM Task Event
+      summary: Task/activity event from CRM system
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/CRMTaskEventPayload'
+
+    ChatMessageEvent:
+      name: ChatMessageEvent
+      title: Chat Message Event
+      summary: Message event from communication platform
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/ChatMessageEventPayload'
+      examples:
+        - name: Slack message with project mention
+          summary: Slack message mentioning a project
+          payload:
+            event_type: message_sent
+            channel:
+              id: C1234567890
+              name: project-updates
+              type: channel
+            message:
+              id: "1234567890.123456"
+              text: "Just completed the login page design for #project-550e8400"
+              user_id: U1234567890
+              user_name: john.doe
+              timestamp: "2024-01-20T15:30:00Z"
+              thread_ts: null
+            mentions:
+              - type: project
+                id: 550e8400-e29b-41d4-a716-446655440000
+                text: "#project-550e8400"
+            attachments: []
+
+    ChannelEvent:
+      name: ChannelEvent
+      title: Channel Event
+      summary: Channel-related event from communication platform
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/ChannelEventPayload'
+
+    UserMentionEvent:
+      name: UserMentionEvent
+      title: User Mention Event
+      summary: User mention event from communication platform
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/UserMentionEventPayload'
+
+    FileShareEvent:
+      name: FileShareEvent
+      title: File Share Event
+      summary: File sharing event from communication platform
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/FileShareEventPayload'
+
+    PaymentSucceededEvent:
+      name: PaymentSucceededEvent
+      title: Payment Succeeded Event
+      summary: Successful payment event from payment processor
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/PaymentSucceededEventPayload'
+      examples:
+        - name: Stripe subscription payment
+          summary: Successful subscription payment via Stripe
+          payload:
+            event_type: payment_succeeded
+            payment:
+              id: pi_1234567890abcdef
+              amount: 2999
+              currency: usd
+              status: succeeded
+              payment_method: card
+              customer_id: cus_1234567890abcdef
+              invoice_id: in_1234567890abcdef
+              description: "Premium subscription"
+            subscription:
+              id: sub_1234567890abcdef
+              plan: premium
+              status: active
+              current_period_start: "2024-01-01T00:00:00Z"
+              current_period_end: "2024-02-01T00:00:00Z"
+
+    PaymentFailedEvent:
+      name: PaymentFailedEvent
+      title: Payment Failed Event
+      summary: Failed payment event from payment processor
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/PaymentFailedEventPayload'
+
+    SubscriptionEvent:
+      name: SubscriptionEvent
+      title: Subscription Event
+      summary: Subscription lifecycle event from payment processor
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/SubscriptionEventPayload'
+
+    RefundEvent:
+      name: RefundEvent
+      title: Refund Event
+      summary: Refund event from payment processor
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/RefundEventPayload'
+
+    ChargebackEvent:
+      name: ChargebackEvent
+      title: Chargeback Event
+      summary: Chargeback event from payment processor
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/ChargebackEventPayload'
+
+    RepositoryEvent:
+      name: RepositoryEvent
+      title: Repository Event
+      summary: Repository event from version control system
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/RepositoryEventPayload'
+      examples:
+        - name: GitHub push event
+          summary: Code pushed to GitHub repository
+          payload:
+            event_type: push
+            repository:
+              id: 123456789
+              name: company/project-management
+              full_name: company/project-management
+              private: true
+              html_url: https://github.com/company/project-management
+            ref: refs/heads/main
+            commits:
+              - id: abc123def456ghi789
+                message: "Add user authentication feature"
+                author:
+                  name: John Doe
+                  email: john.doe@company.com
+                timestamp: "2024-01-20T15:30:00Z"
+                added: [src/auth/login.ts]
+                modified: [src/types/user.ts]
+                removed: []
+            pusher:
+              name: john-doe
+              email: john.doe@company.com
+
+    PullRequestEvent:
+      name: PullRequestEvent
+      title: Pull Request Event
+      summary: Pull request event from version control system
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/PullRequestEventPayload'
+
+    IssueEvent:
+      name: IssueEvent
+      title: Issue Event
+      summary: Issue event from development tool
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/IssueEventPayload'
+
+    DeploymentEvent:
+      name: DeploymentEvent
+      title: Deployment Event
+      summary: Deployment event from CI/CD system
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/DeploymentEventPayload'
+
+    JiraTicketEvent:
+      name: JiraTicketEvent
+      title: Jira Ticket Event
+      summary: Jira ticket event
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/JiraTicketEventPayload'
+
+    CloudResourceEvent:
+      name: CloudResourceEvent
+      title: Cloud Resource Event
+      summary: Cloud resource lifecycle event
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/CloudResourceEventPayload'
+
+    CloudBillingEvent:
+      name: CloudBillingEvent
+      title: Cloud Billing Event
+      summary: Cloud billing and cost event
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/CloudBillingEventPayload'
+
+    CloudSecurityEvent:
+      name: CloudSecurityEvent
+      title: Cloud Security Event
+      summary: Cloud security and compliance event
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/CloudSecurityEventPayload'
+
+    CloudMonitoringEvent:
+      name: CloudMonitoringEvent
+      title: Cloud Monitoring Event
+      summary: Cloud monitoring and alert event
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/CloudMonitoringEventPayload'
+
+    EmailDeliveredEvent:
+      name: EmailDeliveredEvent
+      title: Email Delivered Event
+      summary: Email delivery confirmation event
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/EmailDeliveredEventPayload'
+
+    EmailBouncedEvent:
+      name: EmailBouncedEvent
+      title: Email Bounced Event
+      summary: Email bounce event
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/EmailBouncedEventPayload'
+
+    EmailOpenedEvent:
+      name: EmailOpenedEvent
+      title: Email Opened Event
+      summary: Email open tracking event
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/EmailOpenedEventPayload'
+
+    EmailClickedEvent:
+      name: EmailClickedEvent
+      title: Email Clicked Event
+      summary: Email link click tracking event
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/EmailClickedEventPayload'
+
+    UnsubscribeEvent:
+      name: UnsubscribeEvent
+      title: Unsubscribe Event
+      summary: Email unsubscribe event
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/UnsubscribeEventPayload'
+
+    AnalyticsGoalEvent:
+      name: AnalyticsGoalEvent
+      title: Analytics Goal Event
+      summary: Analytics goal completion event
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/AnalyticsGoalEventPayload'
+
+    CohortEvent:
+      name: CohortEvent
+      title: Cohort Event
+      summary: User cohort analysis event
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/CohortEventPayload'
+
+    FunnelEvent:
+      name: FunnelEvent
+      title: Funnel Event
+      summary: Conversion funnel event
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/FunnelEventPayload'
+
+    ExperimentResultEvent:
+      name: ExperimentResultEvent
+      title: Experiment Result Event
+      summary: A/B test result event
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/ExperimentResultEventPayload'
+
+    IntegrationStatusEvent:
+      name: IntegrationStatusEvent
+      title: Integration Status Event
+      summary: Integration health status event
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/IntegrationStatusEventPayload'
+
+    IntegrationErrorEvent:
+      name: IntegrationErrorEvent
+      title: Integration Error Event
+      summary: Integration error event
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/IntegrationErrorEventPayload'
+
+    RateLimitEvent:
+      name: RateLimitEvent
+      title: Rate Limit Event
+      summary: Integration rate limit event
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/integrationHeaders'
+      payload:
+        $ref: '#/components/schemas/RateLimitEventPayload'
+
+  schemas:
+    CRMContactEventPayload:
+      type: object
+      required:
+        - event_type
+        - contact
+      properties:
+        event_type:
+          type: string
+          enum: [contact_created, contact_updated, contact_deleted, contact_merged]
+        contact:
+          $ref: '#/components/schemas/CRMContact'
+        changes:
+          type: object
+          description: Changed fields for update events
+          additionalProperties: true
+        custom_fields:
+          type: object
+          additionalProperties: true
+
+    CRMDealEventPayload:
+      type: object
+      required:
+        - event_type
+        - deal
+      properties:
+        event_type:
+          type: string
+          enum: [deal_created, deal_updated, deal_won, deal_lost, deal_stage_changed]
+        deal:
+          $ref: '#/components/schemas/CRMDeal'
+        previous_stage:
+          type: string
+        stage_duration:
+          type: integer
+          description: Time spent in previous stage (seconds)
+        win_reason:
+          type: string
+        loss_reason:
+          type: string
+
+    CRMCompanyEventPayload:
+      type: object
+      required:
+        - event_type
+        - company
+      properties:
+        event_type:
+          type: string
+          enum: [company_created, company_updated, company_deleted]
+        company:
+          $ref: '#/components/schemas/CRMCompany'
+
+    CRMTaskEventPayload:
+      type: object
+      required:
+        - event_type
+        - task
+      properties:
+        event_type:
+          type: string
+          enum: [task_created, task_completed, task_updated, task_deleted]
+        task:
+          $ref: '#/components/schemas/CRMTask'
+
+    ChatMessageEventPayload:
+      type: object
+      required:
+        - event_type
+        - channel
+        - message
+      properties:
+        event_type:
+          type: string
+          enum: [message_sent, message_updated, message_deleted, message_replied]
+        channel:
+          $ref: '#/components/schemas/ChatChannel'
+        message:
+          $ref: '#/components/schemas/ChatMessage'
+        mentions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Mention'
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/FileAttachment'
+
+    ChannelEventPayload:
+      type: object
+      required:
+        - event_type
+        - channel
+      properties:
+        event_type:
+          type: string
+          enum: [channel_created, channel_deleted, channel_archived, member_joined, member_left]
+        channel:
+          $ref: '#/components/schemas/ChatChannel'
+        user:
+          $ref: '#/components/schemas/ChatUser'
+
+    UserMentionEventPayload:
+      type: object
+      required:
+        - event_type
+        - channel
+        - message
+        - mentioned_user
+      properties:
+        event_type:
+          type: string
+          const: user_mentioned
+        channel:
+          $ref: '#/components/schemas/ChatChannel'
+        message:
+          $ref: '#/components/schemas/ChatMessage'
+        mentioned_user:
+          $ref: '#/components/schemas/ChatUser'
+        mention_type:
+          type: string
+          enum: [direct, channel, everyone]
+
+    FileShareEventPayload:
+      type: object
+      required:
+        - event_type
+        - channel
+        - file
+        - user
+      properties:
+        event_type:
+          type: string
+          enum: [file_shared, file_updated, file_deleted]
+        channel:
+          $ref: '#/components/schemas/ChatChannel'
+        file:
+          $ref: '#/components/schemas/SharedFile'
+        user:
+          $ref: '#/components/schemas/ChatUser'
+
+    PaymentSucceededEventPayload:
+      type: object
+      required:
+        - event_type
+        - payment
+      properties:
+        event_type:
+          type: string
+          const: payment_succeeded
+        payment:
+          $ref: '#/components/schemas/Payment'
+        subscription:
+          $ref: '#/components/schemas/Subscription'
+        customer:
+          $ref: '#/components/schemas/Customer'
+
+    PaymentFailedEventPayload:
+      type: object
+      required:
+        - event_type
+        - payment
+        - failure_reason
+      properties:
+        event_type:
+          type: string
+          const: payment_failed
+        payment:
+          $ref: '#/components/schemas/Payment'
+        failure_reason:
+          type: string
+        failure_code:
+          type: string
+        retry_count:
+          type: integer
+        next_retry_at:
+          type: string
+          format: date-time
+
+    SubscriptionEventPayload:
+      type: object
+      required:
+        - event_type
+        - subscription
+      properties:
+        event_type:
+          type: string
+          enum: [subscription_created, subscription_updated, subscription_cancelled, subscription_renewed]
+        subscription:
+          $ref: '#/components/schemas/Subscription'
+        previous_status:
+          type: string
+        change_reason:
+          type: string
+
+    RefundEventPayload:
+      type: object
+      required:
+        - event_type
+        - refund
+      properties:
+        event_type:
+          type: string
+          enum: [refund_created, refund_updated, refund_succeeded, refund_failed]
+        refund:
+          $ref: '#/components/schemas/Refund'
+        original_payment:
+          $ref: '#/components/schemas/Payment'
+
+    ChargebackEventPayload:
+      type: object
+      required:
+        - event_type
+        - chargeback
+      properties:
+        event_type:
+          type: string
+          enum: [chargeback_created, chargeback_updated, chargeback_won, chargeback_lost]
+        chargeback:
+          $ref: '#/components/schemas/Chargeback'
+        original_payment:
+          $ref: '#/components/schemas/Payment'
+
+    RepositoryEventPayload:
+      type: object
+      required:
+        - event_type
+        - repository
+      properties:
+        event_type:
+          type: string
+          enum: [push, pull_request, release, tag, branch_created, branch_deleted]
+        repository:
+          $ref: '#/components/schemas/Repository'
+        ref:
+          type: string
+        commits:
+          type: array
+          items:
+            $ref: '#/components/schemas/Commit'
+        pusher:
+          $ref: '#/components/schemas/GitUser'
+
+    PullRequestEventPayload:
+      type: object
+      required:
+        - event_type
+        - pull_request
+        - repository
+      properties:
+        event_type:
+          type: string
+          enum: [opened, closed, merged, review_requested, review_submitted]
+        pull_request:
+          $ref: '#/components/schemas/PullRequest'
+        repository:
+          $ref: '#/components/schemas/Repository'
+        review:
+          $ref: '#/components/schemas/PullRequestReview'
+
+    IssueEventPayload:
+      type: object
+      required:
+        - event_type
+        - issue
+      properties:
+        event_type:
+          type: string
+          enum: [opened, closed, reopened, assigned, unassigned, labeled, unlabeled]
+        issue:
+          $ref: '#/components/schemas/Issue'
+        assignee:
+          $ref: '#/components/schemas/GitUser'
+        label:
+          $ref: '#/components/schemas/Label'
+
+    DeploymentEventPayload:
+      type: object
+      required:
+        - event_type
+        - deployment
+      properties:
+        event_type:
+          type: string
+          enum: [deployment_started, deployment_succeeded, deployment_failed, deployment_rollback]
+        deployment:
+          $ref: '#/components/schemas/Deployment'
+        environment:
+          type: string
+        duration:
+          type: integer
+          description: Deployment duration in seconds
+
+    JiraTicketEventPayload:
+      type: object
+      required:
+        - event_type
+        - ticket
+      properties:
+        event_type:
+          type: string
+          enum: [ticket_created, ticket_updated, ticket_transition, ticket_commented]
+        ticket:
+          $ref: '#/components/schemas/JiraTicket'
+        transition:
+          $ref: '#/components/schemas/JiraTransition'
+        comment:
+          $ref: '#/components/schemas/JiraComment'
+
+    CloudResourceEventPayload:
+      type: object
+      required:
+        - event_type
+        - resource
+      properties:
+        event_type:
+          type: string
+          enum: [resource_created, resource_updated, resource_deleted, resource_scaled]
+        resource:
+          $ref: '#/components/schemas/CloudResource'
+        resource_type:
+          type: string
+        region:
+          type: string
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+
+    CloudBillingEventPayload:
+      type: object
+      required:
+        - event_type
+        - billing_data
+      properties:
+        event_type:
+          type: string
+          enum: [cost_alert, budget_exceeded, usage_spike, billing_anomaly]
+        billing_data:
+          $ref: '#/components/schemas/CloudBilling'
+        threshold:
+          type: number
+        period:
+          type: string
+
+    CloudSecurityEventPayload:
+      type: object
+      required:
+        - event_type
+        - security_event
+      properties:
+        event_type:
+          type: string
+          enum: [security_finding, compliance_violation, access_denied, policy_violation]
+        security_event:
+          $ref: '#/components/schemas/CloudSecurityFinding'
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+
+    CloudMonitoringEventPayload:
+      type: object
+      required:
+        - event_type
+        - alert
+      properties:
+        event_type:
+          type: string
+          enum: [metric_alert, health_check_failed, service_down, performance_degradation]
+        alert:
+          $ref: '#/components/schemas/CloudAlert'
+        metric:
+          $ref: '#/components/schemas/CloudMetric'
+
+    EmailDeliveredEventPayload:
+      type: object
+      required:
+        - event_type
+        - email
+      properties:
+        event_type:
+          type: string
+          const: email_delivered
+        email:
+          $ref: '#/components/schemas/EmailMessage'
+        delivery_time:
+          type: string
+          format: date-time
+        smtp_response:
+          type: string
+
+    EmailBouncedEventPayload:
+      type: object
+      required:
+        - event_type
+        - email
+        - bounce_type
+        - bounce_reason
+      properties:
+        event_type:
+          type: string
+          const: email_bounced
+        email:
+          $ref: '#/components/schemas/EmailMessage'
+        bounce_type:
+          type: string
+          enum: [hard, soft, complaint]
+        bounce_reason:
+          type: string
+        bounce_code:
+          type: string
+
+    EmailOpenedEventPayload:
+      type: object
+      required:
+        - event_type
+        - email
+      properties:
+        event_type:
+          type: string
+          const: email_opened
+        email:
+          $ref: '#/components/schemas/EmailMessage'
+        open_time:
+          type: string
+          format: date-time
+        user_agent:
+          type: string
+        ip_address:
+          type: string
+        location:
+          $ref: '#/components/schemas/Location'
+
+    EmailClickedEventPayload:
+      type: object
+      required:
+        - event_type
+        - email
+        - link
+      properties:
+        event_type:
+          type: string
+          const: email_clicked
+        email:
+          $ref: '#/components/schemas/EmailMessage'
+        link:
+          $ref: '#/components/schemas/EmailLink'
+        click_time:
+          type: string
+          format: date-time
+        user_agent:
+          type: string
+        ip_address:
+          type: string
+
+    UnsubscribeEventPayload:
+      type: object
+      required:
+        - event_type
+        - email
+      properties:
+        event_type:
+          type: string
+          const: unsubscribed
+        email:
+          $ref: '#/components/schemas/EmailMessage'
+        unsubscribe_time:
+          type: string
+          format: date-time
+        unsubscribe_method:
+          type: string
+          enum: [link, reply, complaint]
+
+    AnalyticsGoalEventPayload:
+      type: object
+      required:
+        - event_type
+        - goal
+      properties:
+        event_type:
+          type: string
+          enum: [goal_completed, goal_updated, goal_created]
+        goal:
+          $ref: '#/components/schemas/AnalyticsGoal'
+        conversion_value:
+          type: number
+        attribution:
+          $ref: '#/components/schemas/Attribution'
+
+    CohortEventPayload:
+      type: object
+      required:
+        - event_type
+        - cohort
+      properties:
+        event_type:
+          type: string
+          enum: [cohort_created, cohort_updated, cohort_analyzed]
+        cohort:
+          $ref: '#/components/schemas/Cohort'
+        metrics:
+          type: object
+          additionalProperties:
+            type: number
+
+    FunnelEventPayload:
+      type: object
+      required:
+        - event_type
+        - funnel
+      properties:
+        event_type:
+          type: string
+          enum: [funnel_step_completed, funnel_conversion, funnel_drop_off]
+        funnel:
+          $ref: '#/components/schemas/Funnel'
+        step:
+          $ref: '#/components/schemas/FunnelStep'
+        conversion_rate:
+          type: number
+
+    ExperimentResultEventPayload:
+      type: object
+      required:
+        - event_type
+        - experiment
+        - result
+      properties:
+        event_type:
+          type: string
+          enum: [experiment_completed, experiment_result_updated, experiment_concluded]
+        experiment:
+          $ref: '#/components/schemas/Experiment'
+        result:
+          $ref: '#/components/schemas/ExperimentResult'
+        statistical_significance:
+          type: number
+
+    IntegrationStatusEventPayload:
+      type: object
+      required:
+        - event_type
+        - integration
+        - status
+      properties:
+        event_type:
+          type: string
+          enum: [status_changed, health_check, connection_restored, connection_lost]
+        integration:
+          $ref: '#/components/schemas/Integration'
+        status:
+          type: string
+          enum: [healthy, degraded, down, maintenance]
+        previous_status:
+          type: string
+        uptime_percentage:
+          type: number
+
+    IntegrationErrorEventPayload:
+      type: object
+      required:
+        - event_type
+        - integration
+        - error
+      properties:
+        event_type:
+          type: string
+          enum: [error_occurred, error_resolved, error_escalated]
+        integration:
+          $ref: '#/components/schemas/Integration'
+        error:
+          $ref: '#/components/schemas/IntegrationError'
+        retry_count:
+          type: integer
+        resolution_time:
+          type: integer
+
+    RateLimitEventPayload:
+      type: object
+      required:
+        - event_type
+        - integration
+        - rate_limit
+      properties:
+        event_type:
+          type: string
+          enum: [rate_limit_hit, rate_limit_reset, rate_limit_warning]
+        integration:
+          $ref: '#/components/schemas/Integration'
+        rate_limit:
+          $ref: '#/components/schemas/RateLimit'
+        backoff_duration:
+          type: integer
+
+    # Common schema definitions
+    CRMContact:
+      type: object
+      properties:
+        id:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        company:
+          type: string
+        title:
+          type: string
+        lead_source:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    CRMDeal:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        stage:
+          type: string
+        probability:
+          type: number
+        close_date:
+          type: string
+          format: date
+        owner_id:
+          type: string
+        account_id:
+          type: string
+
+    CRMCompany:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        industry:
+          type: string
+        employee_count:
+          type: integer
+        annual_revenue:
+          type: number
+        website:
+          type: string
+          format: uri
+
+    CRMTask:
+      type: object
+      properties:
+        id:
+          type: string
+        subject:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+        priority:
+          type: string
+        due_date:
+          type: string
+          format: date-time
+        owner_id:
+          type: string
+
+    ChatChannel:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [channel, direct_message, group_message]
+        private:
+          type: boolean
+
+    ChatMessage:
+      type: object
+      properties:
+        id:
+          type: string
+        text:
+          type: string
+        user_id:
+          type: string
+        user_name:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        thread_ts:
+          type: string
+        edited:
+          type: boolean
+
+    ChatUser:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        display_name:
+          type: string
+
+    Mention:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [user, project, task, channel]
+        id:
+          type: string
+        text:
+          type: string
+
+    FileAttachment:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        size:
+          type: integer
+        mime_type:
+          type: string
+        url:
+          type: string
+          format: uri
+
+    SharedFile:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        size:
+          type: integer
+        mime_type:
+          type: string
+        url:
+          type: string
+          format: uri
+        permissions:
+          type: array
+          items:
+            type: string
+
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+        amount:
+          type: integer
+        currency:
+          type: string
+        status:
+          type: string
+        payment_method:
+          type: string
+        customer_id:
+          type: string
+        invoice_id:
+          type: string
+        description:
+          type: string
+
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: string
+        plan:
+          type: string
+        status:
+          type: string
+        current_period_start:
+          type: string
+          format: date-time
+        current_period_end:
+          type: string
+          format: date-time
+
+    Customer:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+
+    Refund:
+      type: object
+      properties:
+        id:
+          type: string
+        amount:
+          type: integer
+        currency:
+          type: string
+        status:
+          type: string
+        reason:
+          type: string
+
+    Chargeback:
+      type: object
+      properties:
+        id:
+          type: string
+        amount:
+          type: integer
+        currency:
+          type: string
+        status:
+          type: string
+        reason_code:
+          type: string
+
+    Repository:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        full_name:
+          type: string
+        private:
+          type: boolean
+        html_url:
+          type: string
+          format: uri
+
+    Commit:
+      type: object
+      properties:
+        id:
+          type: string
+        message:
+          type: string
+        author:
+          $ref: '#/components/schemas/GitUser'
+        timestamp:
+          type: string
+          format: date-time
+        added:
+          type: array
+          items:
+            type: string
+        modified:
+          type: array
+          items:
+            type: string
+        removed:
+          type: array
+          items:
+            type: string
+
+    GitUser:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        username:
+          type: string
+
+    PullRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+        number:
+          type: integer
+        title:
+          type: string
+        state:
+          type: string
+        user:
+          $ref: '#/components/schemas/GitUser'
+        head:
+          type: object
+        base:
+          type: object
+
+    PullRequestReview:
+      type: object
+      properties:
+        id:
+          type: integer
+        state:
+          type: string
+        user:
+          $ref: '#/components/schemas/GitUser'
+        body:
+          type: string
+
+    Issue:
+      type: object
+      properties:
+        id:
+          type: integer
+        number:
+          type: integer
+        title:
+          type: string
+        state:
+          type: string
+        user:
+          $ref: '#/components/schemas/GitUser'
+        assignees:
+          type: array
+          items:
+            $ref: '#/components/schemas/GitUser'
+        labels:
+          type: array
+          items:
+            $ref: '#/components/schemas/Label'
+
+    Label:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        color:
+          type: string
+
+    Deployment:
+      type: object
+      properties:
+        id:
+          type: string
+        sha:
+          type: string
+        ref:
+          type: string
+        environment:
+          type: string
+        creator:
+          $ref: '#/components/schemas/GitUser'
+        created_at:
+          type: string
+          format: date-time
+
+    JiraTicket:
+      type: object
+      properties:
+        id:
+          type: string
+        key:
+          type: string
+        summary:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+        priority:
+          type: string
+        assignee:
+          type: string
+        reporter:
+          type: string
+
+    JiraTransition:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        from_status:
+          type: string
+        to_status:
+          type: string
+
+    JiraComment:
+      type: object
+      properties:
+        id:
+          type: string
+        body:
+          type: string
+        author:
+          type: string
+        created:
+          type: string
+          format: date-time
+
+    CloudResource:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+        status:
+          type: string
+        region:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CloudBilling:
+      type: object
+      properties:
+        account_id:
+          type: string
+        service:
+          type: string
+        cost:
+          type: number
+        currency:
+          type: string
+        period:
+          type: string
+        usage:
+          type: number
+
+    CloudSecurityFinding:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        severity:
+          type: string
+        resource_id:
+          type: string
+        compliance_status:
+          type: string
+
+    CloudAlert:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        state:
+          type: string
+        severity:
+          type: string
+
+    CloudMetric:
+      type: object
+      properties:
+        name:
+          type: string
+        value:
+          type: number
+        unit:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    EmailMessage:
+      type: object
+      properties:
+        id:
+          type: string
+        from:
+          type: string
+          format: email
+        to:
+          type: string
+          format: email
+        subject:
+          type: string
+        message_id:
+          type: string
+
+    EmailLink:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+        text:
+          type: string
+        position:
+          type: integer
+
+    Location:
+      type: object
+      properties:
+        country:
+          type: string
+        region:
+          type: string
+        city:
+          type: string
+
+    AnalyticsGoal:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+        value:
+          type: number
+
+    Attribution:
+      type: object
+      properties:
+        source:
+          type: string
+        medium:
+          type: string
+        campaign:
+          type: string
+
+    Cohort:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        criteria:
+          type: object
+        size:
+          type: integer
+
+    Funnel:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/FunnelStep'
+
+    FunnelStep:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        order:
+          type: integer
+
+    Experiment:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        hypothesis:
+          type: string
+        variants:
+          type: array
+          items:
+            type: string
+
+    ExperimentResult:
+      type: object
+      properties:
+        variant:
+          type: string
+        conversions:
+          type: integer
+        participants:
+          type: integer
+        conversion_rate:
+          type: number
+
+    Integration:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        provider:
+          type: string
+        type:
+          type: string
+
+    IntegrationError:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+
+    RateLimit:
+      type: object
+      properties:
+        limit:
+          type: integer
+        remaining:
+          type: integer
+        reset_at:
+          type: string
+          format: date-time
+
+tags:
+  - name: CRM Integrations
+    description: Customer Relationship Management system integrations
+  - name: Communication
+    description: Team communication platform integrations
+  - name: Payments
+    description: Payment processor integrations
+  - name: Development Tools
+    description: Development and version control tool integrations
+  - name: Cloud Services
+    description: Cloud platform integrations
+  - name: Email Services
+    description: Email service provider integrations
+  - name: Analytics
+    description: Analytics platform integrations
+  - name: Integration Health
+    description: Integration monitoring and health status
+
+externalDocs:
+  description: Integration Documentation
+  url: https://docs.company.com/integrations

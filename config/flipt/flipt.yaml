@@ -1,0 +1,201 @@
+# Flipt Configuration
+# Complete configuration for both local development and production environments
+
+version: "1.0"
+
+# Server configuration
+server:
+  host: "0.0.0.0"
+  http_port: 8080
+  https_port: 443
+  grpc_port: 9000
+  protocol: "http"
+
+# Database configuration
+db:
+  url: "${FLIPT_DB_URL:-file:./flipt.db}"
+  migrations:
+    auto: true
+    path: "./migrations"
+  max_idle_conn: 2
+  max_open_conn: 5
+  conn_max_lifetime: 60s
+
+# Authentication configuration
+authentication:
+  required: false
+  exclude:
+    management: false
+  session:
+    domain: "${FLIPT_SESSION_DOMAIN:-localhost}"
+    secure: false
+    token_lifetime: 24h
+    state_lifetime: 10m
+    csrf:
+      key: "${FLIPT_CSRF_KEY:-flipt}"
+  methods:
+    token:
+      enabled: true
+      cleanup:
+        interval: 1h
+        grace_period: 30m
+    github:
+      enabled: false
+      client_id: "${GITHUB_CLIENT_ID}"
+      client_secret: "${GITHUB_CLIENT_SECRET}"
+      redirect_address: "${GITHUB_REDIRECT_URL:-http://localhost:8080}"
+      scopes:
+        - "user:email"
+    oidc:
+      enabled: false
+      providers:
+        google:
+          issuer_url: "https://accounts.google.com"
+          client_id: "${GOOGLE_CLIENT_ID}"
+          client_secret: "${GOOGLE_CLIENT_SECRET}"
+          redirect_address: "${GOOGLE_REDIRECT_URL:-http://localhost:8080/auth/v1/method/oidc/google/callback}"
+          scopes:
+            - "openid"
+            - "email"
+            - "profile"
+
+# Authorization configuration
+authorization:
+  required: false
+  policy:
+    backend: "local"
+    local:
+      data: |
+        package flipt.authz
+
+        import rego.v1
+
+        default allow := false
+
+        # Allow all actions for development
+        allow if {
+          input.authentication.metadata.role == "admin"
+        }
+
+        # Allow read operations for authenticated users
+        allow if {
+          input.request.resource in ["flag", "segment", "rule", "variant", "namespace"]
+          input.request.action == "read"
+          input.authentication.present
+        }
+
+# CORS configuration
+cors:
+  enabled: true
+  allowed_origins:
+    - "http://localhost:3000"
+    - "http://localhost:4200"
+    - "http://localhost:8080"
+    - "${FLIPT_CORS_ALLOWED_ORIGINS}"
+  allowed_headers:
+    - "Accept"
+    - "Authorization"
+    - "Content-Type"
+    - "X-CSRF-Token"
+
+# Logging configuration
+log:
+  level: "${FLIPT_LOG_LEVEL:-INFO}"
+  encoding: "console"
+  grpc_level: "${FLIPT_GRPC_LOG_LEVEL:-ERROR}"
+
+# Tracing configuration
+tracing:
+  enabled: false
+  exporter: "jaeger"
+  jaeger:
+    host: "${JAEGER_HOST:-localhost}"
+    port: 14268
+
+# Metrics configuration
+metrics:
+  enabled: true
+  exporter: "prometheus"
+  prometheus:
+    enabled: true
+
+# Cache configuration
+cache:
+  enabled: true
+  backend: "memory"
+  ttl: 60s
+  memory:
+    eviction_interval: 10m
+  redis:
+    host: "${REDIS_HOST:-localhost}"
+    port: 6379
+    db: 0
+    password: "${REDIS_PASSWORD}"
+    pool_size: 10
+
+# Storage configuration for production
+storage:
+  type: "local"
+  local:
+    path: "./config"
+  git:
+    repository: "${FLIPT_GIT_REPO}"
+    ref: "${FLIPT_GIT_REF:-main}"
+    backend: "go"
+    authentication:
+      token:
+        access_token: "${FLIPT_GIT_TOKEN}"
+  s3:
+    bucket: "${FLIPT_S3_BUCKET}"
+    prefix: "${FLIPT_S3_PREFIX:-flipt/}"
+    region: "${AWS_REGION:-us-east-1}"
+    endpoint: "${FLIPT_S3_ENDPOINT}"
+
+# Audit configuration
+audit:
+  enabled: false
+  buffer:
+    capacity: 1000
+    flush_period: 10s
+  sinks:
+    log:
+      enabled: true
+      file: "./audit.log"
+    webhook:
+      enabled: false
+      url: "${FLIPT_AUDIT_WEBHOOK_URL}"
+      max_backoff_duration: 15s
+      signing_secret: "${FLIPT_AUDIT_WEBHOOK_SECRET}"
+
+# Cloud configuration (for Flipt Cloud)
+cloud:
+  enabled: false
+  host: "flipt.cloud"
+  organization: "${FLIPT_CLOUD_ORG}"
+  gateway:
+    address: "${FLIPT_CLOUD_GATEWAY}"
+
+# Feature flag import/export
+import_export:
+  enabled: true
+
+# UI configuration
+ui:
+  enabled: true
+  default_theme: "system"
+
+# Meta configuration
+meta:
+  check_for_updates: false
+  telemetry_enabled: false
+  state_directory: "${FLIPT_STATE_DIR:-.flipt}"
+
+# Advanced configuration
+advanced:
+  evaluation:
+    cache_size: 1000
+    cache_ttl: 5m
+  grpc:
+    connection_timeout: 30s
+    read_timeout: 5m
+    write_timeout: 5m

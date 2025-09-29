@@ -1,0 +1,1535 @@
+openapi: 3.1.0
+info:
+  title: Project Management API
+  description: |
+    Comprehensive REST API for project management in the NX monorepo template.
+
+    This API provides endpoints for managing projects, tasks, milestones, and team collaboration.
+    It includes support for real-time updates, file attachments, and advanced filtering.
+
+    ## Authentication
+    All endpoints require authentication via JWT tokens or API keys.
+
+    ## Rate Limiting
+    - Standard users: 1000 requests per hour
+    - Premium users: 5000 requests per hour
+    - Admin users: 10000 requests per hour
+
+    ## Versioning
+    This API uses semantic versioning. Breaking changes will increment the major version.
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: api-support@company.com
+    url: https://docs.company.com/api
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: https://company.com/terms
+
+servers:
+  - url: https://api.company.com/v1
+    description: Production server
+  - url: https://staging-api.company.com/v1
+    description: Staging server
+  - url: https://dev-api.company.com/v1
+    description: Development server
+  - url: http://localhost:3000/api/v1
+    description: Local development server
+
+security:
+  - BearerAuth: []
+  - ApiKeyAuth: []
+
+paths:
+  /projects:
+    get:
+      summary: List projects
+      description: Retrieve a paginated list of projects with optional filtering and sorting
+      operationId: listProjects
+      tags:
+        - Projects
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/SortParam'
+        - name: status
+          in: query
+          description: Filter by project status
+          schema:
+            $ref: '#/components/schemas/ProjectStatus'
+        - name: owner
+          in: query
+          description: Filter by project owner ID
+          schema:
+            type: string
+            format: uuid
+        - name: search
+          in: query
+          description: Search projects by name or description
+          schema:
+            type: string
+            minLength: 3
+            maxLength: 100
+        - name: created_after
+          in: query
+          description: Filter projects created after this date
+          schema:
+            type: string
+            format: date-time
+        - name: created_before
+          in: query
+          description: Filter projects created before this date
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Successfully retrieved projects
+          headers:
+            X-Total-Count:
+              description: Total number of projects
+              schema:
+                type: integer
+            X-Rate-Limit-Remaining:
+              description: Number of requests remaining in the current rate limit window
+              schema:
+                type: integer
+            X-Rate-Limit-Reset:
+              description: Time when the rate limit window resets
+              schema:
+                type: string
+                format: date-time
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Project'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationInfo'
+                  meta:
+                    type: object
+                    properties:
+                      total_count:
+                        type: integer
+                      filtered_count:
+                        type: integer
+              examples:
+                success:
+                  summary: Successful response with projects
+                  value:
+                    data:
+                      - id: 550e8400-e29b-41d4-a716-446655440000
+                        name: Website Redesign
+                        description: Complete redesign of the company website
+                        status: active
+                        owner_id: 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+                        created_at: "2024-01-15T10:30:00Z"
+                        updated_at: "2024-01-20T14:45:00Z"
+                    pagination:
+                      page: 1
+                      limit: 20
+                      total_pages: 5
+                      has_next: true
+                      has_previous: false
+                    meta:
+                      total_count: 100
+                      filtered_count: 85
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      summary: Create a new project
+      description: Create a new project with the specified details
+      operationId: createProject
+      tags:
+        - Projects
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectCreateRequest'
+            examples:
+              basic_project:
+                summary: Basic project creation
+                value:
+                  name: Mobile App Development
+                  description: Develop a new mobile application for iOS and Android
+                  status: planning
+                  owner_id: 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+                  start_date: "2024-02-01"
+                  end_date: "2024-08-31"
+                  budget: 150000
+                  priority: high
+              complex_project:
+                summary: Complex project with team and milestones
+                value:
+                  name: E-commerce Platform
+                  description: Build a scalable e-commerce platform
+                  status: planning
+                  owner_id: 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+                  start_date: "2024-03-01"
+                  end_date: "2024-12-31"
+                  budget: 500000
+                  priority: critical
+                  team_members:
+                    - user_id: 123e4567-e89b-12d3-a456-426614174000
+                      role: developer
+                    - user_id: 987fcdeb-51a2-43d1-9f12-345678901234
+                      role: designer
+                  milestones:
+                    - name: MVP Release
+                      due_date: "2024-06-30"
+                      description: Minimum viable product release
+      responses:
+        '201':
+          description: Project created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+              examples:
+                created_project:
+                  summary: Newly created project
+                  value:
+                    id: 550e8400-e29b-41d4-a716-446655440000
+                    name: Mobile App Development
+                    description: Develop a new mobile application for iOS and Android
+                    status: planning
+                    owner_id: 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+                    start_date: "2024-02-01"
+                    end_date: "2024-08-31"
+                    budget: 150000
+                    priority: high
+                    created_at: "2024-01-25T10:30:00Z"
+                    updated_at: "2024-01-25T10:30:00Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{projectId}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+
+    get:
+      summary: Get project by ID
+      description: Retrieve detailed information about a specific project
+      operationId: getProject
+      tags:
+        - Projects
+      responses:
+        '200':
+          description: Project details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectDetailed'
+              examples:
+                project_detail:
+                  summary: Detailed project information
+                  value:
+                    id: 550e8400-e29b-41d4-a716-446655440000
+                    name: Website Redesign
+                    description: Complete redesign of the company website
+                    status: active
+                    owner_id: 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+                    start_date: "2024-01-15"
+                    end_date: "2024-06-15"
+                    budget: 75000
+                    priority: high
+                    progress: 45
+                    team_members:
+                      - user_id: 123e4567-e89b-12d3-a456-426614174000
+                        role: developer
+                        name: John Doe
+                        email: john@company.com
+                    milestones:
+                      - id: 789e0123-e45b-67c8-d901-234567890123
+                        name: Design Phase Complete
+                        due_date: "2024-03-01"
+                        status: completed
+                        completion_date: "2024-02-28"
+                    tasks_count: 24
+                    completed_tasks_count: 11
+                    created_at: "2024-01-15T10:30:00Z"
+                    updated_at: "2024-01-20T14:45:00Z"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      summary: Update project
+      description: Update an existing project with new information
+      operationId: updateProject
+      tags:
+        - Projects
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectUpdateRequest'
+            examples:
+              status_update:
+                summary: Update project status
+                value:
+                  status: active
+                  progress: 75
+              full_update:
+                summary: Comprehensive project update
+                value:
+                  name: Website Redesign v2
+                  description: Enhanced website redesign with mobile-first approach
+                  status: active
+                  end_date: "2024-07-15"
+                  budget: 85000
+                  priority: critical
+                  progress: 60
+      responses:
+        '200':
+          description: Project updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      summary: Delete project
+      description: |
+        Delete a project and all associated data. This action is irreversible.
+        Only project owners and admin users can delete projects.
+      operationId: deleteProject
+      tags:
+        - Projects
+      responses:
+        '204':
+          description: Project deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Cannot delete project with active dependencies
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              examples:
+                active_tasks:
+                  summary: Project has active tasks
+                  value:
+                    type: https://api.company.com/problems/project-has-dependencies
+                    title: Cannot Delete Project
+                    status: 409
+                    detail: Project cannot be deleted because it has active tasks or milestones
+                    instance: /projects/550e8400-e29b-41d4-a716-446655440000
+                    dependencies:
+                      active_tasks: 5
+                      pending_milestones: 2
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{projectId}/tasks:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+
+    get:
+      summary: List project tasks
+      description: Retrieve all tasks associated with a specific project
+      operationId: listProjectTasks
+      tags:
+        - Projects
+        - Tasks
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: status
+          in: query
+          description: Filter tasks by status
+          schema:
+            $ref: '#/components/schemas/TaskStatus'
+        - name: assignee
+          in: query
+          description: Filter tasks by assignee ID
+          schema:
+            type: string
+            format: uuid
+        - name: priority
+          in: query
+          description: Filter tasks by priority
+          schema:
+            $ref: '#/components/schemas/Priority'
+      responses:
+        '200':
+          description: Tasks retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Task'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      summary: Create project task
+      description: Create a new task within the specified project
+      operationId: createProjectTask
+      tags:
+        - Projects
+        - Tasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskCreateRequest'
+      responses:
+        '201':
+          description: Task created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{projectId}/milestones:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+
+    get:
+      summary: List project milestones
+      description: Retrieve all milestones for a specific project
+      operationId: listProjectMilestones
+      tags:
+        - Projects
+        - Milestones
+      responses:
+        '200':
+          description: Milestones retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Milestone'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      summary: Create project milestone
+      description: Create a new milestone for the specified project
+      operationId: createProjectMilestone
+      tags:
+        - Projects
+        - Milestones
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MilestoneCreateRequest'
+      responses:
+        '201':
+          description: Milestone created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Milestone'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{projectId}/team:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+
+    get:
+      summary: Get project team members
+      description: Retrieve all team members assigned to a specific project
+      operationId: getProjectTeam
+      tags:
+        - Projects
+        - Team
+      responses:
+        '200':
+          description: Team members retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TeamMember'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      summary: Add team member
+      description: Add a new team member to the project
+      operationId: addProjectTeamMember
+      tags:
+        - Projects
+        - Team
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamMemberAddRequest'
+      responses:
+        '201':
+          description: Team member added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamMember'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{projectId}/files:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+
+    get:
+      summary: List project files
+      description: Retrieve all files attached to a specific project
+      operationId: listProjectFiles
+      tags:
+        - Projects
+        - Files
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: type
+          in: query
+          description: Filter files by type
+          schema:
+            type: string
+            enum: [document, image, video, audio, archive, other]
+      responses:
+        '200':
+          description: Files retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProjectFile'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      summary: Upload project file
+      description: Upload a new file to the project
+      operationId: uploadProjectFile
+      tags:
+        - Projects
+        - Files
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The file to upload
+                description:
+                  type: string
+                  description: Optional file description
+                  maxLength: 500
+                category:
+                  type: string
+                  description: File category
+                  enum: [document, image, video, audio, archive, other]
+              required:
+                - file
+      responses:
+        '201':
+          description: File uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectFile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          description: File too large
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '415':
+          description: Unsupported media type
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from the authentication endpoint
+
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for programmatic access
+
+    OAuth2:
+      type: oauth2
+      description: OAuth2 authorization code flow
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.company.com/oauth/authorize
+          tokenUrl: https://auth.company.com/oauth/token
+          scopes:
+            projects:read: Read access to projects
+            projects:write: Write access to projects
+            projects:admin: Administrative access to projects
+            files:read: Read access to files
+            files:write: Write access to files
+
+  parameters:
+    ProjectIdParam:
+      name: projectId
+      in: path
+      required: true
+      description: Unique identifier of the project
+      schema:
+        type: string
+        format: uuid
+      example: 550e8400-e29b-41d4-a716-446655440000
+
+    PageParam:
+      name: page
+      in: query
+      description: Page number for pagination (1-based)
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      example: 1
+
+    LimitParam:
+      name: limit
+      in: query
+      description: Number of items per page
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      example: 20
+
+    SortParam:
+      name: sort
+      in: query
+      description: Sort order for results
+      schema:
+        type: string
+        enum: [name_asc, name_desc, created_asc, created_desc, updated_asc, updated_desc, priority_asc, priority_desc]
+        default: created_desc
+      example: name_asc
+
+  schemas:
+    Project:
+      type: object
+      required:
+        - id
+        - name
+        - status
+        - owner_id
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the project
+          readOnly: true
+          example: 550e8400-e29b-41d4-a716-446655440000
+        name:
+          type: string
+          description: Project name
+          minLength: 1
+          maxLength: 200
+          example: Website Redesign
+        description:
+          type: string
+          description: Detailed project description
+          maxLength: 2000
+          example: Complete redesign of the company website with modern UI/UX
+        status:
+          $ref: '#/components/schemas/ProjectStatus'
+        owner_id:
+          type: string
+          format: uuid
+          description: ID of the project owner
+          example: 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+        start_date:
+          type: string
+          format: date
+          description: Project start date
+          example: "2024-01-15"
+        end_date:
+          type: string
+          format: date
+          description: Project end date
+          example: "2024-06-15"
+        budget:
+          type: number
+          format: decimal
+          minimum: 0
+          description: Project budget in USD
+          example: 75000
+        priority:
+          $ref: '#/components/schemas/Priority'
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Project completion percentage
+          example: 45
+        created_at:
+          type: string
+          format: date-time
+          description: Project creation timestamp
+          readOnly: true
+          example: "2024-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          readOnly: true
+          example: "2024-01-20T14:45:00Z"
+
+    ProjectDetailed:
+      allOf:
+        - $ref: '#/components/schemas/Project'
+        - type: object
+          properties:
+            team_members:
+              type: array
+              items:
+                $ref: '#/components/schemas/TeamMember'
+              description: Project team members
+            milestones:
+              type: array
+              items:
+                $ref: '#/components/schemas/Milestone'
+              description: Project milestones
+            tasks_count:
+              type: integer
+              description: Total number of tasks
+              readOnly: true
+              example: 24
+            completed_tasks_count:
+              type: integer
+              description: Number of completed tasks
+              readOnly: true
+              example: 11
+            files_count:
+              type: integer
+              description: Number of attached files
+              readOnly: true
+              example: 7
+
+    ProjectCreateRequest:
+      type: object
+      required:
+        - name
+        - owner_id
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: Mobile App Development
+        description:
+          type: string
+          maxLength: 2000
+          example: Develop a new mobile application for iOS and Android
+        status:
+          $ref: '#/components/schemas/ProjectStatus'
+          default: planning
+        owner_id:
+          type: string
+          format: uuid
+          example: 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+        start_date:
+          type: string
+          format: date
+          example: "2024-02-01"
+        end_date:
+          type: string
+          format: date
+          example: "2024-08-31"
+        budget:
+          type: number
+          format: decimal
+          minimum: 0
+          example: 150000
+        priority:
+          $ref: '#/components/schemas/Priority'
+          default: medium
+        team_members:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamMemberAddRequest'
+          description: Initial team members
+        milestones:
+          type: array
+          items:
+            $ref: '#/components/schemas/MilestoneCreateRequest'
+          description: Initial milestones
+
+    ProjectUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
+        status:
+          $ref: '#/components/schemas/ProjectStatus'
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        budget:
+          type: number
+          format: decimal
+          minimum: 0
+        priority:
+          $ref: '#/components/schemas/Priority'
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+
+    ProjectStatus:
+      type: string
+      enum: [planning, active, on_hold, completed, cancelled]
+      description: Current status of the project
+      example: active
+
+    Priority:
+      type: string
+      enum: [low, medium, high, critical]
+      description: Priority level
+      example: high
+
+    Task:
+      type: object
+      required:
+        - id
+        - title
+        - status
+        - project_id
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          example: 123e4567-e89b-12d3-a456-426614174000
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: Design login page
+        description:
+          type: string
+          maxLength: 2000
+          example: Create wireframes and mockups for the user login page
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        priority:
+          $ref: '#/components/schemas/Priority'
+        project_id:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        assignee_id:
+          type: string
+          format: uuid
+          example: 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+        due_date:
+          type: string
+          format: date
+          example: "2024-02-15"
+        estimated_hours:
+          type: number
+          format: decimal
+          minimum: 0
+          example: 8.5
+        actual_hours:
+          type: number
+          format: decimal
+          minimum: 0
+          example: 6.25
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          example: "2024-01-20T09:15:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          example: "2024-01-22T14:30:00Z"
+
+    TaskStatus:
+      type: string
+      enum: [todo, in_progress, review, done, blocked]
+      description: Current status of the task
+      example: in_progress
+
+    TaskCreateRequest:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+          default: todo
+        priority:
+          $ref: '#/components/schemas/Priority'
+          default: medium
+        assignee_id:
+          type: string
+          format: uuid
+        due_date:
+          type: string
+          format: date
+        estimated_hours:
+          type: number
+          format: decimal
+          minimum: 0
+
+    Milestone:
+      type: object
+      required:
+        - id
+        - name
+        - due_date
+        - project_id
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          example: 789e0123-e45b-67c8-d901-234567890123
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: Design Phase Complete
+        description:
+          type: string
+          maxLength: 1000
+          example: All design mockups and wireframes completed
+        due_date:
+          type: string
+          format: date
+          example: "2024-03-01"
+        project_id:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        status:
+          $ref: '#/components/schemas/MilestoneStatus'
+        completion_date:
+          type: string
+          format: date
+          example: "2024-02-28"
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          example: "2024-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          example: "2024-02-28T16:45:00Z"
+
+    MilestoneStatus:
+      type: string
+      enum: [pending, in_progress, completed, overdue]
+      description: Current status of the milestone
+      example: completed
+
+    MilestoneCreateRequest:
+      type: object
+      required:
+        - name
+        - due_date
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 1000
+        due_date:
+          type: string
+          format: date
+
+    TeamMember:
+      type: object
+      required:
+        - user_id
+        - role
+        - joined_at
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          example: 123e4567-e89b-12d3-a456-426614174000
+        name:
+          type: string
+          readOnly: true
+          example: John Doe
+        email:
+          type: string
+          format: email
+          readOnly: true
+          example: john@company.com
+        role:
+          $ref: '#/components/schemas/TeamRole'
+        permissions:
+          type: array
+          items:
+            type: string
+          example: [read, write, delete]
+        joined_at:
+          type: string
+          format: date-time
+          readOnly: true
+          example: "2024-01-15T10:30:00Z"
+
+    TeamRole:
+      type: string
+      enum: [owner, admin, developer, designer, tester, viewer]
+      description: Role of the team member in the project
+      example: developer
+
+    TeamMemberAddRequest:
+      type: object
+      required:
+        - user_id
+        - role
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        role:
+          $ref: '#/components/schemas/TeamRole'
+        permissions:
+          type: array
+          items:
+            type: string
+          description: Custom permissions for the team member
+
+    ProjectFile:
+      type: object
+      required:
+        - id
+        - filename
+        - size
+        - mime_type
+        - project_id
+        - uploaded_by
+        - uploaded_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          example: 456e7890-e12b-34c5-d678-901234567890
+        filename:
+          type: string
+          example: project-requirements.pdf
+        original_filename:
+          type: string
+          example: Project Requirements Document.pdf
+        description:
+          type: string
+          maxLength: 500
+          example: Initial project requirements and specifications
+        size:
+          type: integer
+          description: File size in bytes
+          example: 2048576
+        mime_type:
+          type: string
+          example: application/pdf
+        category:
+          type: string
+          enum: [document, image, video, audio, archive, other]
+          example: document
+        project_id:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        uploaded_by:
+          type: string
+          format: uuid
+          example: 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+        download_url:
+          type: string
+          format: uri
+          readOnly: true
+          example: https://api.company.com/v1/files/456e7890-e12b-34c5-d678-901234567890/download
+        uploaded_at:
+          type: string
+          format: date-time
+          readOnly: true
+          example: "2024-01-18T11:22:33Z"
+
+    PaginationInfo:
+      type: object
+      required:
+        - page
+        - limit
+        - total_pages
+        - has_next
+        - has_previous
+      properties:
+        page:
+          type: integer
+          minimum: 1
+          description: Current page number
+          example: 1
+        limit:
+          type: integer
+          minimum: 1
+          description: Number of items per page
+          example: 20
+        total_pages:
+          type: integer
+          minimum: 0
+          description: Total number of pages
+          example: 5
+        has_next:
+          type: boolean
+          description: Whether there is a next page
+          example: true
+        has_previous:
+          type: boolean
+          description: Whether there is a previous page
+          example: false
+
+    ProblemDetail:
+      type: object
+      description: RFC 7807 Problem Details for HTTP APIs
+      required:
+        - type
+        - title
+        - status
+      properties:
+        type:
+          type: string
+          format: uri
+          description: A URI reference that identifies the problem type
+          example: https://api.company.com/problems/validation-error
+        title:
+          type: string
+          description: A short, human-readable summary of the problem type
+          example: Validation Error
+        status:
+          type: integer
+          description: The HTTP status code
+          example: 400
+        detail:
+          type: string
+          description: A human-readable explanation specific to this occurrence
+          example: The request body contains invalid data
+        instance:
+          type: string
+          format: uri
+          description: A URI reference that identifies the specific occurrence
+          example: /projects/550e8400-e29b-41d4-a716-446655440000
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                example: name
+              message:
+                type: string
+                example: Name is required
+              code:
+                type: string
+                example: REQUIRED_FIELD_MISSING
+
+  responses:
+    BadRequest:
+      description: Bad Request - Invalid request parameters or body
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          examples:
+            validation_error:
+              summary: Validation error
+              value:
+                type: https://api.company.com/problems/validation-error
+                title: Validation Error
+                status: 400
+                detail: The request contains invalid or missing required fields
+                instance: /projects
+                errors:
+                  - field: name
+                    message: Name is required
+                    code: REQUIRED_FIELD_MISSING
+                  - field: owner_id
+                    message: Invalid UUID format
+                    code: INVALID_FORMAT
+
+    Unauthorized:
+      description: Unauthorized - Missing or invalid authentication
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          examples:
+            missing_token:
+              summary: Missing authentication token
+              value:
+                type: https://api.company.com/problems/authentication-required
+                title: Authentication Required
+                status: 401
+                detail: Valid authentication credentials are required
+                instance: /projects
+            invalid_token:
+              summary: Invalid authentication token
+              value:
+                type: https://api.company.com/problems/invalid-token
+                title: Invalid Token
+                status: 401
+                detail: The provided authentication token is invalid or expired
+                instance: /projects
+
+    Forbidden:
+      description: Forbidden - Insufficient permissions
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          examples:
+            insufficient_permissions:
+              summary: Insufficient permissions
+              value:
+                type: https://api.company.com/problems/insufficient-permissions
+                title: Insufficient Permissions
+                status: 403
+                detail: You do not have permission to access this resource
+                instance: /projects/550e8400-e29b-41d4-a716-446655440000
+
+    NotFound:
+      description: Not Found - Resource does not exist
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          examples:
+            project_not_found:
+              summary: Project not found
+              value:
+                type: https://api.company.com/problems/resource-not-found
+                title: Resource Not Found
+                status: 404
+                detail: The requested project could not be found
+                instance: /projects/550e8400-e29b-41d4-a716-446655440000
+
+    Conflict:
+      description: Conflict - Resource already exists or conflict with current state
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          examples:
+            duplicate_resource:
+              summary: Duplicate resource
+              value:
+                type: https://api.company.com/problems/duplicate-resource
+                title: Resource Already Exists
+                status: 409
+                detail: A project with this name already exists
+                instance: /projects
+
+    UnprocessableEntity:
+      description: Unprocessable Entity - Request is well-formed but contains semantic errors
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          examples:
+            business_rule_violation:
+              summary: Business rule violation
+              value:
+                type: https://api.company.com/problems/business-rule-violation
+                title: Business Rule Violation
+                status: 422
+                detail: End date must be after start date
+                instance: /projects
+
+    TooManyRequests:
+      description: Too Many Requests - Rate limit exceeded
+      headers:
+        Retry-After:
+          description: Number of seconds to wait before retrying
+          schema:
+            type: integer
+        X-Rate-Limit-Limit:
+          description: The rate limit ceiling for that given endpoint
+          schema:
+            type: integer
+        X-Rate-Limit-Remaining:
+          description: The number of requests left for the time window
+          schema:
+            type: integer
+        X-Rate-Limit-Reset:
+          description: The time when the rate limit window resets
+          schema:
+            type: string
+            format: date-time
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          examples:
+            rate_limit_exceeded:
+              summary: Rate limit exceeded
+              value:
+                type: https://api.company.com/problems/rate-limit-exceeded
+                title: Rate Limit Exceeded
+                status: 429
+                detail: You have exceeded the rate limit. Please try again later
+                instance: /projects
+
+    InternalServerError:
+      description: Internal Server Error - Unexpected server error
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          examples:
+            server_error:
+              summary: Internal server error
+              value:
+                type: https://api.company.com/problems/internal-server-error
+                title: Internal Server Error
+                status: 500
+                detail: An unexpected error occurred while processing your request
+                instance: /projects
+
+  examples:
+    ProjectExample:
+      summary: Example project
+      value:
+        id: 550e8400-e29b-41d4-a716-446655440000
+        name: Website Redesign
+        description: Complete redesign of the company website
+        status: active
+        owner_id: 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+        start_date: "2024-01-15"
+        end_date: "2024-06-15"
+        budget: 75000
+        priority: high
+        progress: 45
+        created_at: "2024-01-15T10:30:00Z"
+        updated_at: "2024-01-20T14:45:00Z"
+
+tags:
+  - name: Projects
+    description: Project management operations
+  - name: Tasks
+    description: Task management within projects
+  - name: Milestones
+    description: Project milestone tracking
+  - name: Team
+    description: Project team management
+  - name: Files
+    description: File attachment management
+
+externalDocs:
+  description: API Documentation Portal
+  url: https://docs.company.com/api/project-management

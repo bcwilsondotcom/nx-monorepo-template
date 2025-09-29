@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "title": "OpenAPI Code Generator",
+  "description": "Generate code from OpenAPI specifications",
+  "type": "object",
+  "properties": {
+    "spec": {
+      "type": "string",
+      "description": "Path to the OpenAPI specification file"
+    },
+    "output": {
+      "type": "string",
+      "description": "Output directory for generated code"
+    },
+    "generator": {
+      "type": "string",
+      "description": "Generator to use",
+      "enum": [
+        "typescript-axios",
+        "typescript-fetch",
+        "typescript-node",
+        "python",
+        "java"
+      ]
+    },
+    "additionalProperties": {
+      "type": "object",
+      "description": "Additional properties to pass to the generator"
+    }
+  },
+  "required": ["spec", "output", "generator"]
+}

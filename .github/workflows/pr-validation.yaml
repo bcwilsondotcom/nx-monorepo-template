@@ -1,0 +1,314 @@
+name: PR Validation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+  issues: write
+
+jobs:
+  pr-info:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    outputs:
+      size-label: ${{ steps.size.outputs.label }}
+      changed-files: ${{ steps.files.outputs.changed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get changed files
+        id: files
+        run: |
+          FILES=$(git diff --name-only origin/main...HEAD | tr '\n' ' ')
+          echo "changed=$FILES" >> $GITHUB_OUTPUT
+          echo "Changed files: $FILES"
+
+      - name: Calculate PR size
+        id: size
+        run: |
+          LINES_ADDED=$(git diff --numstat origin/main...HEAD | awk '{sum += $1} END {print sum}')
+          LINES_DELETED=$(git diff --numstat origin/main...HEAD | awk '{sum += $2} END {print sum}')
+          TOTAL_CHANGES=$((LINES_ADDED + LINES_DELETED))
+
+          if [ $TOTAL_CHANGES -lt 100 ]; then
+            echo "label=size/XS" >> $GITHUB_OUTPUT
+          elif [ $TOTAL_CHANGES -lt 300 ]; then
+            echo "label=size/S" >> $GITHUB_OUTPUT
+          elif [ $TOTAL_CHANGES -lt 500 ]; then
+            echo "label=size/M" >> $GITHUB_OUTPUT
+          elif [ $TOTAL_CHANGES -lt 1000 ]; then
+            echo "label=size/L" >> $GITHUB_OUTPUT
+          else
+            echo "label=size/XL" >> $GITHUB_OUTPUT
+          fi
+
+          echo "Total changes: $TOTAL_CHANGES lines"
+
+  commit-validation:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install commitlint
+        run: |
+          npm install -g @commitlint/cli @commitlint/config-conventional
+
+      - name: Validate commit messages
+        run: |
+          echo "module.exports = {extends: ['@commitlint/config-conventional']}" > commitlint.config.js
+          npx commitlint --from origin/main --to HEAD --verbose
+
+  security-scan:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run npm audit
+        id: audit
+        run: |
+          if pnpm audit --audit-level high; then
+            echo "status=passed" >> $GITHUB_OUTPUT
+          else
+            echo "status=failed" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      - name: Run Snyk security scan
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: TruffleHog OSS
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: origin/main
+          head: HEAD
+          extra_args: --debug --only-verified
+
+  size-impact:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    needs: pr-info
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build for size analysis
+        run: |
+          pnpm nx affected -t build --base=origin/main || true
+
+      - name: Analyze bundle size
+        id: size-analysis
+        run: |
+          echo "## Bundle Size Impact" > size-report.md
+          echo "" >> size-report.md
+
+          if [ -d "dist" ]; then
+            echo "### Build Artifacts" >> size-report.md
+            find dist -name "*.js" -o -name "*.css" | head -10 | while read file; do
+              size=$(stat -c%s "$file" 2>/dev/null || echo "0")
+              size_kb=$((size / 1024))
+              echo "- \`$file\`: ${size_kb}KB" >> size-report.md
+            done
+          else
+            echo "No build artifacts found for size analysis." >> size-report.md
+          fi
+
+          echo "" >> size-report.md
+          echo "### Changed Files Impact" >> size-report.md
+          echo "Files changed: ${{ needs.pr-info.outputs.changed-files }}" >> size-report.md
+
+      - name: Upload size report
+        uses: actions/upload-artifact@v4
+        with:
+          name: size-report
+          path: size-report.md
+
+  auto-label:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    needs: [pr-info]
+    steps:
+      - name: Add size label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = '${{ needs.pr-info.outputs.size-label }}';
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: [label]
+            });
+
+      - name: Add component labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const changedFiles = '${{ needs.pr-info.outputs.changed-files }}';
+            const labels = new Set();
+
+            if (changedFiles.includes('apps/')) {
+              labels.add('apps');
+            }
+            if (changedFiles.includes('packages/') || changedFiles.includes('libs/')) {
+              labels.add('packages');
+            }
+            if (changedFiles.includes('infrastructure/')) {
+              labels.add('infrastructure');
+            }
+            if (changedFiles.includes('.github/')) {
+              labels.add('ci/cd');
+            }
+            if (changedFiles.includes('package.json') || changedFiles.includes('pnpm-lock.yaml')) {
+              labels.add('dependencies');
+            }
+            if (changedFiles.includes('.md')) {
+              labels.add('documentation');
+            }
+            if (changedFiles.includes('test') || changedFiles.includes('spec')) {
+              labels.add('testing');
+            }
+
+            if (labels.size > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: Array.from(labels)
+              });
+            }
+
+  comment-results:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false && always()
+    needs: [pr-info, commit-validation, security-scan, secrets-scan, size-impact]
+    steps:
+      - name: Download size report
+        uses: actions/download-artifact@v4
+        with:
+          name: size-report
+        continue-on-error: true
+
+      - name: Comment PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            let comment = '## PR Validation Results\n\n';
+
+            // Add validation status
+            const commitStatus = '${{ needs.commit-validation.result }}' === 'success' ? '✅' : '❌';
+            const securityStatus = '${{ needs.security-scan.result }}' === 'success' ? '✅' : '❌';
+            const secretsStatus = '${{ needs.secrets-scan.result }}' === 'success' ? '✅' : '❌';
+
+            comment += '### Validation Checks\n';
+            comment += `- ${commitStatus} Commit message validation\n`;
+            comment += `- ${securityStatus} Security scan (npm audit)\n`;
+            comment += `- ${secretsStatus} Secrets scan\n\n`;
+
+            // Add size info
+            comment += `### PR Size: \`${{ needs.pr-info.outputs.size-label }}\`\n\n`;
+
+            // Add size report if available
+            try {
+              const sizeReport = fs.readFileSync('size-report.md', 'utf8');
+              comment += sizeReport + '\n\n';
+            } catch (e) {
+              comment += '_Size analysis not available_\n\n';
+            }
+
+            comment += '---\n';
+            comment += '_This comment is automatically generated by the PR validation workflow._';
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+
+  validation-success:
+    runs-on: ubuntu-latest
+    needs: [commit-validation, security-scan, secrets-scan, size-impact, auto-label]
+    if: always()
+    steps:
+      - name: Check validation results
+        if: |
+          needs.commit-validation.result == 'failure' ||
+          needs.security-scan.result == 'failure' ||
+          needs.secrets-scan.result == 'failure'
+        run: |
+          echo "PR validation failed. Please check the failed jobs above."
+          exit 1
+
+      - name: Validation passed
+        run: echo "All PR validation checks passed successfully"

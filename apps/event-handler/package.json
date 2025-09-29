@@ -1,0 +1,22 @@
+{
+  "name": "@nx-monorepo-template/event-handler",
+  "version": "0.1.0",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/main.js",
+    "dev": "nodemon src/main.ts",
+    "build": "tsc",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@nx-monorepo-template/shared-types": "*",
+    "aws-sdk": "^2.1400.0",
+    "axios": "^1.5.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.119",
+    "@types/node": "^20.0.0",
+    "@types/uuid": "^9.0.0"
+  }
+}

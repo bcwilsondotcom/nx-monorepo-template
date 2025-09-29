@@ -1,0 +1,344 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      force_deploy:
+        description: 'Force deployment even if no changes detected'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.environment || (github.event_name == 'release' && 'production' || 'staging') }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+  packages: write
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+
+jobs:
+  determine-environment:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+      should-deploy: ${{ steps.check.outputs.should-deploy }}
+    steps:
+      - name: Determine environment
+        id: env
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "environment=${{ inputs.environment }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" = "release" ]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+          else
+            echo "environment=staging" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if deployment needed
+        id: check
+        run: |
+          if [ "${{ inputs.force_deploy }}" = "true" ]; then
+            echo "should-deploy=true" >> $GITHUB_OUTPUT
+            echo "Force deployment requested"
+          elif [ "${{ github.event_name }}" = "release" ]; then
+            echo "should-deploy=true" >> $GITHUB_OUTPUT
+            echo "Release deployment"
+          else
+            # Check if there are changes that affect deployable apps
+            DEPLOYABLE_CHANGES=$(git diff HEAD~1 --name-only | grep -E "(apps/|packages/|infrastructure/)" || true)
+            if [ -n "$DEPLOYABLE_CHANGES" ]; then
+              echo "should-deploy=true" >> $GITHUB_OUTPUT
+              echo "Deployable changes detected: $DEPLOYABLE_CHANGES"
+            else
+              echo "should-deploy=false" >> $GITHUB_OUTPUT
+              echo "No deployable changes detected"
+            fi
+          fi
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs: determine-environment
+    if: needs.determine-environment.outputs.should-deploy == 'true'
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.ECR_REGISTRY }}/nx-monorepo
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ needs.determine-environment.outputs.environment }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build affected projects
+        run: |
+          pnpm nx affected -t build --base=HEAD~1
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            NODE_ENV=production
+            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+            VCS_REF=${{ github.sha }}
+
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: [determine-environment, build-and-push]
+    if: needs.determine-environment.outputs.environment == 'staging' && needs.determine-environment.outputs.should-deploy == 'true'
+    environment:
+      name: staging
+      url: https://staging.example.com
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy to ECS Staging
+        run: |
+          # Update ECS service with new image
+          aws ecs update-service \
+            --cluster staging-cluster \
+            --service nx-monorepo-staging \
+            --task-definition staging-task-definition \
+            --force-new-deployment
+
+          # Wait for deployment to complete
+          aws ecs wait services-stable \
+            --cluster staging-cluster \
+            --services nx-monorepo-staging
+
+      - name: Run smoke tests
+        run: |
+          # Wait for service to be ready
+          sleep 30
+
+          # Basic health check
+          curl -f https://staging.example.com/health || exit 1
+
+          # API connectivity test
+          curl -f https://staging.example.com/api/health || exit 1
+
+          echo "Staging deployment and smoke tests completed successfully"
+
+  deploy-production:
+    runs-on: ubuntu-latest
+    needs: [determine-environment, build-and-push]
+    if: needs.determine-environment.outputs.environment == 'production' && needs.determine-environment.outputs.should-deploy == 'true'
+    environment:
+      name: production
+      url: https://example.com
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get current task definition
+        id: current-task
+        run: |
+          CURRENT_TASK_DEF=$(aws ecs describe-services \
+            --cluster production-cluster \
+            --services nx-monorepo-production \
+            --query 'services[0].taskDefinition' \
+            --output text)
+          echo "current-task-def=$CURRENT_TASK_DEF" >> $GITHUB_OUTPUT
+
+      - name: Deploy to ECS Production
+        id: deploy
+        run: |
+          # Update ECS service with new image
+          aws ecs update-service \
+            --cluster production-cluster \
+            --service nx-monorepo-production \
+            --task-definition production-task-definition \
+            --force-new-deployment
+
+          # Wait for deployment to complete
+          aws ecs wait services-stable \
+            --cluster production-cluster \
+            --services nx-monorepo-production
+
+      - name: Run smoke tests
+        id: smoke-tests
+        run: |
+          # Wait for service to be ready
+          sleep 60
+
+          # Basic health check
+          if ! curl -f https://example.com/health; then
+            echo "Health check failed"
+            exit 1
+          fi
+
+          # API connectivity test
+          if ! curl -f https://example.com/api/health; then
+            echo "API health check failed"
+            exit 1
+          fi
+
+          # Additional production smoke tests
+          if ! curl -f https://example.com/api/version; then
+            echo "Version endpoint check failed"
+            exit 1
+          fi
+
+          echo "Production deployment and smoke tests completed successfully"
+
+      - name: Rollback on failure
+        if: failure() && steps.deploy.conclusion == 'success'
+        run: |
+          echo "Deployment or smoke tests failed. Rolling back..."
+
+          # Rollback to previous task definition
+          aws ecs update-service \
+            --cluster production-cluster \
+            --service nx-monorepo-production \
+            --task-definition ${{ steps.current-task.outputs.current-task-def }}
+
+          # Wait for rollback to complete
+          aws ecs wait services-stable \
+            --cluster production-cluster \
+            --services nx-monorepo-production
+
+          echo "Rollback completed"
+          exit 1
+
+  notify-deployment:
+    runs-on: ubuntu-latest
+    needs: [determine-environment, deploy-staging, deploy-production]
+    if: always() && needs.determine-environment.outputs.should-deploy == 'true'
+    steps:
+      - name: Notify Slack on success
+        if: (needs.deploy-staging.result == 'success' || needs.deploy-production.result == 'success')
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_MESSAGE: |
+            🚀 Deployment to ${{ needs.determine-environment.outputs.environment }} completed successfully!
+
+            Environment: ${{ needs.determine-environment.outputs.environment }}
+            Commit: ${{ github.sha }}
+            Actor: ${{ github.actor }}
+
+            ${{ needs.determine-environment.outputs.environment == 'production' && 'https://example.com' || 'https://staging.example.com' }}
+
+      - name: Notify Slack on failure
+        if: (needs.deploy-staging.result == 'failure' || needs.deploy-production.result == 'failure')
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: danger
+          SLACK_MESSAGE: |
+            ❌ Deployment to ${{ needs.determine-environment.outputs.environment }} failed!
+
+            Environment: ${{ needs.determine-environment.outputs.environment }}
+            Commit: ${{ github.sha }}
+            Actor: ${{ github.actor }}
+
+            Please check the workflow logs for details.
+
+  deployment-summary:
+    runs-on: ubuntu-latest
+    needs: [determine-environment, build-and-push, deploy-staging, deploy-production]
+    if: always() && needs.determine-environment.outputs.should-deploy == 'true'
+    steps:
+      - name: Deployment Summary
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: ${{ needs.determine-environment.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image**: ${{ needs.build-and-push.outputs.image-tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Digest**: ${{ needs.build-and-push.outputs.image-digest }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Actor**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.deploy-staging.result }}" = "success" ] || [ "${{ needs.deploy-production.result }}" = "success" ]; then
+            echo "✅ **Status**: Deployment completed successfully" >> $GITHUB_STEP_SUMMARY
+            if [ "${{ needs.determine-environment.outputs.environment }}" = "production" ]; then
+              echo "🔗 **URL**: https://example.com" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "🔗 **URL**: https://staging.example.com" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "❌ **Status**: Deployment failed" >> $GITHUB_STEP_SUMMARY
+          fi

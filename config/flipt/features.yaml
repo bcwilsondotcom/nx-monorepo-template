@@ -1,0 +1,420 @@
+# Flipt Feature Flag Definitions
+# Initial feature flag configurations for the NX monorepo template
+
+version: "1.2"
+
+# Default namespace for feature flags
+namespace: default
+
+# Flag definitions
+flags:
+  # New Features - Beta and Experimental
+  - key: new_dashboard_ui
+    name: New Dashboard UI
+    description: Enable the redesigned dashboard interface with improved UX
+    enabled: true
+    type: BOOLEAN_FLAG_TYPE
+    metadata:
+      owner: frontend-team
+      created_date: "2024-01-01"
+      tags:
+        - ui
+        - beta
+        - dashboard
+      jira_ticket: "FEAT-001"
+    variants:
+      - key: enabled
+        name: Enabled
+      - key: disabled
+        name: Disabled
+
+  - key: experimental_api_v2
+    name: Experimental API v2
+    description: Enable access to the new v2 API endpoints with enhanced features
+    enabled: false
+    type: BOOLEAN_FLAG_TYPE
+    metadata:
+      owner: backend-team
+      created_date: "2024-01-15"
+      tags:
+        - api
+        - experimental
+        - v2
+      jira_ticket: "API-002"
+    variants:
+      - key: enabled
+        name: Enabled
+      - key: disabled
+        name: Disabled
+
+  - key: ai_powered_search
+    name: AI-Powered Search
+    description: Enable AI-enhanced search functionality with semantic search
+    enabled: false
+    type: BOOLEAN_FLAG_TYPE
+    metadata:
+      owner: ai-team
+      created_date: "2024-02-01"
+      tags:
+        - ai
+        - search
+        - experimental
+      jira_ticket: "AI-001"
+    variants:
+      - key: enabled
+        name: Enabled
+      - key: disabled
+        name: Disabled
+
+  # Operational Flags - System Control
+  - key: maintenance_mode
+    name: Maintenance Mode
+    description: Enable maintenance mode to display maintenance page
+    enabled: false
+    type: BOOLEAN_FLAG_TYPE
+    metadata:
+      owner: devops-team
+      created_date: "2024-01-01"
+      tags:
+        - maintenance
+        - operational
+        - system
+      priority: critical
+    variants:
+      - key: enabled
+        name: Enabled
+      - key: disabled
+        name: Disabled
+
+  - key: rate_limiting_strict
+    name: Strict Rate Limiting
+    description: Enable stricter rate limiting during high traffic periods
+    enabled: false
+    type: BOOLEAN_FLAG_TYPE
+    metadata:
+      owner: backend-team
+      created_date: "2024-01-10"
+      tags:
+        - rate-limiting
+        - performance
+        - operational
+      priority: high
+    variants:
+      - key: enabled
+        name: Enabled
+      - key: disabled
+        name: Disabled
+
+  - key: enhanced_logging
+    name: Enhanced Logging
+    description: Enable detailed logging for debugging and monitoring
+    enabled: true
+    type: BOOLEAN_FLAG_TYPE
+    metadata:
+      owner: devops-team
+      created_date: "2024-01-05"
+      tags:
+        - logging
+        - monitoring
+        - operational
+    variants:
+      - key: enabled
+        name: Enabled
+      - key: disabled
+        name: Disabled
+
+  # A/B Testing Flags
+  - key: checkout_flow_variant
+    name: Checkout Flow Variant
+    description: A/B test different checkout flow designs
+    enabled: true
+    type: VARIANT_FLAG_TYPE
+    metadata:
+      owner: product-team
+      created_date: "2024-01-20"
+      tags:
+        - ab-test
+        - checkout
+        - conversion
+      experiment_id: "EXP-001"
+    variants:
+      - key: control
+        name: Control (Original)
+        attachment: |
+          {
+            "flow_type": "original",
+            "steps": 3,
+            "payment_methods": ["card", "paypal"]
+          }
+      - key: streamlined
+        name: Streamlined Flow
+        attachment: |
+          {
+            "flow_type": "streamlined",
+            "steps": 2,
+            "payment_methods": ["card", "paypal", "apple_pay", "google_pay"]
+          }
+      - key: progressive
+        name: Progressive Flow
+        attachment: |
+          {
+            "flow_type": "progressive",
+            "steps": 4,
+            "payment_methods": ["card", "paypal", "apple_pay", "google_pay", "bnpl"]
+          }
+
+  - key: recommendation_algorithm
+    name: Recommendation Algorithm
+    description: Test different recommendation algorithms for product suggestions
+    enabled: true
+    type: VARIANT_FLAG_TYPE
+    metadata:
+      owner: ml-team
+      created_date: "2024-02-01"
+      tags:
+        - ab-test
+        - recommendations
+        - ml
+      experiment_id: "EXP-002"
+    variants:
+      - key: collaborative_filtering
+        name: Collaborative Filtering
+        attachment: |
+          {
+            "algorithm": "collaborative_filtering",
+            "model_version": "v1.2",
+            "max_recommendations": 10
+          }
+      - key: content_based
+        name: Content-Based
+        attachment: |
+          {
+            "algorithm": "content_based",
+            "model_version": "v2.1",
+            "max_recommendations": 12
+          }
+      - key: hybrid_ml
+        name: Hybrid ML
+        attachment: |
+          {
+            "algorithm": "hybrid_ml",
+            "model_version": "v3.0",
+            "max_recommendations": 15
+          }
+
+  # Kill Switches - Emergency Controls
+  - key: external_integrations
+    name: External Integrations
+    description: Kill switch for all external API integrations
+    enabled: true
+    type: BOOLEAN_FLAG_TYPE
+    metadata:
+      owner: backend-team
+      created_date: "2024-01-01"
+      tags:
+        - kill-switch
+        - integrations
+        - emergency
+      priority: critical
+    variants:
+      - key: enabled
+        name: Enabled
+      - key: disabled
+        name: Disabled
+
+  - key: email_notifications
+    name: Email Notifications
+    description: Kill switch for email notification system
+    enabled: true
+    type: BOOLEAN_FLAG_TYPE
+    metadata:
+      owner: platform-team
+      created_date: "2024-01-01"
+      tags:
+        - kill-switch
+        - email
+        - notifications
+      priority: medium
+    variants:
+      - key: enabled
+        name: Enabled
+      - key: disabled
+        name: Disabled
+
+  - key: payment_processing
+    name: Payment Processing
+    description: Emergency kill switch for payment processing
+    enabled: true
+    type: BOOLEAN_FLAG_TYPE
+    metadata:
+      owner: payments-team
+      created_date: "2024-01-01"
+      tags:
+        - kill-switch
+        - payments
+        - emergency
+      priority: critical
+    variants:
+      - key: enabled
+        name: Enabled
+      - key: disabled
+        name: Disabled
+
+  # Performance and Resource Management
+  - key: image_optimization
+    name: Image Optimization
+    description: Enable advanced image optimization and compression
+    enabled: true
+    type: BOOLEAN_FLAG_TYPE
+    metadata:
+      owner: frontend-team
+      created_date: "2024-01-12"
+      tags:
+        - performance
+        - images
+        - optimization
+    variants:
+      - key: enabled
+        name: Enabled
+      - key: disabled
+        name: Disabled
+
+  - key: cdn_caching_aggressive
+    name: Aggressive CDN Caching
+    description: Enable more aggressive CDN caching strategies
+    enabled: false
+    type: BOOLEAN_FLAG_TYPE
+    metadata:
+      owner: devops-team
+      created_date: "2024-01-25"
+      tags:
+        - performance
+        - cdn
+        - caching
+    variants:
+      - key: enabled
+        name: Enabled
+      - key: disabled
+        name: Disabled
+
+# Segments for targeting specific user groups
+segments:
+  - key: beta_users
+    name: Beta Users
+    description: Users enrolled in beta testing programs
+    match_type: ALL_MATCH_TYPE
+    constraints:
+      - type: STRING_COMPARISON_TYPE
+        property: "user_type"
+        operator: EQ
+        value: "beta"
+      - type: BOOLEAN_COMPARISON_TYPE
+        property: "beta_opted_in"
+        operator: TRUE
+
+  - key: premium_users
+    name: Premium Users
+    description: Users with premium subscription
+    match_type: ALL_MATCH_TYPE
+    constraints:
+      - type: STRING_COMPARISON_TYPE
+        property: "subscription_tier"
+        operator: EQ
+        value: "premium"
+      - type: BOOLEAN_COMPARISON_TYPE
+        property: "subscription_active"
+        operator: TRUE
+
+  - key: internal_users
+    name: Internal Users
+    description: Company employees and internal testers
+    match_type: ANY_MATCH_TYPE
+    constraints:
+      - type: STRING_COMPARISON_TYPE
+        property: "email"
+        operator: SUFFIX
+        value: "@company.com"
+      - type: STRING_COMPARISON_TYPE
+        property: "user_role"
+        operator: EQ
+        value: "internal"
+
+  - key: mobile_users
+    name: Mobile Users
+    description: Users accessing from mobile devices
+    match_type: ALL_MATCH_TYPE
+    constraints:
+      - type: STRING_COMPARISON_TYPE
+        property: "device_type"
+        operator: EQ
+        value: "mobile"
+
+  - key: new_users
+    name: New Users
+    description: Users who registered within the last 30 days
+    match_type: ALL_MATCH_TYPE
+    constraints:
+      - type: DATETIME_COMPARISON_TYPE
+        property: "registration_date"
+        operator: AFTER
+        value: "30d"
+
+# Rules for flag evaluation
+rules:
+  # Beta features for beta users
+  - flag_key: new_dashboard_ui
+    segment_key: beta_users
+    distributions:
+      - variant_key: enabled
+        rollout: 100.0
+
+  - flag_key: ai_powered_search
+    segment_key: beta_users
+    distributions:
+      - variant_key: enabled
+        rollout: 50.0
+      - variant_key: disabled
+        rollout: 50.0
+
+  # Premium features for premium users
+  - flag_key: experimental_api_v2
+    segment_key: premium_users
+    distributions:
+      - variant_key: enabled
+        rollout: 80.0
+      - variant_key: disabled
+        rollout: 20.0
+
+  # A/B testing rules
+  - flag_key: checkout_flow_variant
+    segment_key: mobile_users
+    distributions:
+      - variant_key: streamlined
+        rollout: 50.0
+      - variant_key: control
+        rollout: 50.0
+
+  - flag_key: checkout_flow_variant
+    segment_key: new_users
+    distributions:
+      - variant_key: progressive
+        rollout: 33.3
+      - variant_key: streamlined
+        rollout: 33.3
+      - variant_key: control
+        rollout: 33.4
+
+  # Recommendation algorithm testing
+  - flag_key: recommendation_algorithm
+    segment_key: premium_users
+    distributions:
+      - variant_key: hybrid_ml
+        rollout: 60.0
+      - variant_key: collaborative_filtering
+        rollout: 40.0
+
+  # Performance optimizations for all users
+  - flag_key: image_optimization
+    distributions:
+      - variant_key: enabled
+        rollout: 100.0

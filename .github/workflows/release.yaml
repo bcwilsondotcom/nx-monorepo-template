@@ -1,0 +1,501 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - prerelease
+      prerelease_tag:
+        description: 'Prerelease tag (alpha, beta, rc)'
+        required: false
+        default: 'alpha'
+        type: choice
+        options:
+          - alpha
+          - beta
+          - rc
+      dry_run:
+        description: 'Dry run (no actual release)'
+        required: false
+        default: false
+        type: boolean
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  packages: write
+  pull-requests: write
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+
+jobs:
+  prepare-release:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    outputs:
+      new-version: ${{ steps.version.outputs.new-version }}
+      changelog: ${{ steps.changelog.outputs.changelog }}
+      release-notes: ${{ steps.changelog.outputs.release-notes }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Install release tools
+        run: |
+          npm install -g conventional-changelog-cli @commitlint/cli @commitlint/config-conventional
+
+      - name: Get current version
+        id: current-version
+        run: |
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "current-version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $CURRENT_VERSION"
+
+      - name: Calculate new version
+        id: version
+        run: |
+          CURRENT_VERSION="${{ steps.current-version.outputs.current-version }}"
+
+          case "${{ inputs.release_type }}" in
+            "major")
+              NEW_VERSION=$(node -p "
+                const semver = require('semver');
+                semver.inc('$CURRENT_VERSION', 'major');
+              ")
+              ;;
+            "minor")
+              NEW_VERSION=$(node -p "
+                const semver = require('semver');
+                semver.inc('$CURRENT_VERSION', 'minor');
+              ")
+              ;;
+            "patch")
+              NEW_VERSION=$(node -p "
+                const semver = require('semver');
+                semver.inc('$CURRENT_VERSION', 'patch');
+              ")
+              ;;
+            "prerelease")
+              NEW_VERSION=$(node -p "
+                const semver = require('semver');
+                semver.inc('$CURRENT_VERSION', 'prerelease', '${{ inputs.prerelease_tag }}');
+              ")
+              ;;
+          esac
+
+          echo "new-version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "New version: $NEW_VERSION"
+
+      - name: Update version in package.json
+        if: ${{ !inputs.dry_run }}
+        run: |
+          NEW_VERSION="${{ steps.version.outputs.new-version }}"
+          npm version $NEW_VERSION --no-git-tag-version
+
+          # Update all workspace packages
+          find . -name "package.json" -not -path "./node_modules/*" -exec \
+            node -e "
+              const fs = require('fs');
+              const path = process.argv[1];
+              const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
+              if (pkg.name && pkg.name.startsWith('@nx-monorepo-template/')) {
+                pkg.version = '$NEW_VERSION';
+                fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n');
+                console.log('Updated version in ' + path);
+              }
+            " {} \;
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Generate full changelog
+          conventional-changelog -p angular -i CHANGELOG.md -s -r 0
+
+          # Extract release notes for this version
+          RELEASE_NOTES=$(conventional-changelog -p angular -u)
+
+          # Save changelog and release notes
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          cat CHANGELOG.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          echo "release-notes<<EOF" >> $GITHUB_OUTPUT
+          echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Update Nx project versions
+        if: ${{ !inputs.dry_run }}
+        run: |
+          NEW_VERSION="${{ steps.version.outputs.new-version }}"
+
+          # Update package.json in all projects
+          pnpm nx run-many -t version --args="--version=$NEW_VERSION" || true
+
+      - name: Commit version changes
+        if: ${{ !inputs.dry_run }}
+        run: |
+          NEW_VERSION="${{ steps.version.outputs.new-version }}"
+
+          git add .
+          git commit -m "chore(release): bump version to $NEW_VERSION
+
+          Generated changelog and updated package versions across the monorepo.
+
+          🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+          Co-Authored-By: Claude <noreply@anthropic.com>"
+
+          git tag "v$NEW_VERSION"
+          git push origin main
+          git push origin "v$NEW_VERSION"
+
+  build-release-artifacts:
+    runs-on: ubuntu-latest
+    needs: prepare-release
+    if: (github.event_name == 'workflow_dispatch' && !inputs.dry_run) || github.event_name == 'push'
+    outputs:
+      artifacts-path: ${{ steps.build.outputs.artifacts-path }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all projects
+        id: build
+        run: |
+          # Build all projects for release
+          pnpm nx run-many -t build --configuration=production
+
+          # Create release artifacts directory
+          mkdir -p release-artifacts
+
+          # Copy build outputs
+          find dist -type f \( -name "*.js" -o -name "*.css" -o -name "*.html" \) -exec cp {} release-artifacts/ \;
+
+          # Copy package.json files for publishing
+          find . -name "package.json" -not -path "./node_modules/*" -not -path "./release-artifacts/*" \
+            -exec cp {} release-artifacts/ \;
+
+          # Create artifacts summary
+          echo "## Release Artifacts" > release-artifacts/ARTIFACTS.md
+          echo "" >> release-artifacts/ARTIFACTS.md
+          find release-artifacts -type f | sort | while read file; do
+            size=$(stat -c%s "$file" 2>/dev/null || echo "0")
+            size_kb=$((size / 1024))
+            echo "- \`$(basename $file)\`: ${size_kb}KB" >> release-artifacts/ARTIFACTS.md
+          done
+
+          echo "artifacts-path=release-artifacts" >> $GITHUB_OUTPUT
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: release-artifacts/
+          retention-days: 30
+
+  publish-packages:
+    runs-on: ubuntu-latest
+    needs: [prepare-release, build-release-artifacts]
+    if: (github.event_name == 'workflow_dispatch' && !inputs.dry_run) || github.event_name == 'push'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm nx run-many -t build --configuration=production
+
+      - name: Publish to NPM
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          # Configure npm for publishing
+          echo "//registry.npmjs.org/:_authToken=$NODE_AUTH_TOKEN" > ~/.npmrc
+
+          # Publish all packages
+          find packages -name "package.json" -exec dirname {} \; | while read package_dir; do
+            if [ -f "$package_dir/dist/package.json" ]; then
+              echo "Publishing $package_dir..."
+              cd "$package_dir/dist"
+              npm publish --access public || echo "Failed to publish $package_dir"
+              cd - > /dev/null
+            fi
+          done
+
+  build-and-tag-docker:
+    runs-on: ubuntu-latest
+    needs: [prepare-release, build-release-artifacts]
+    if: (github.event_name == 'workflow_dispatch' && !inputs.dry_run) || github.event_name == 'push'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ needs.prepare-release.outputs.new-version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.ECR_REGISTRY }}/nx-monorepo
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ steps.version.outputs.version }}
+            type=raw,value=stable
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            NODE_ENV=production
+            VERSION=${{ steps.version.outputs.version }}
+            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+            VCS_REF=${{ github.sha }}
+
+  create-github-release:
+    runs-on: ubuntu-latest
+    needs: [prepare-release, build-release-artifacts, publish-packages]
+    if: (github.event_name == 'workflow_dispatch' && !inputs.dry_run) || github.event_name == 'push'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-artifacts
+          path: release-artifacts/
+
+      - name: Get version and release notes
+        id: release-info
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ needs.prepare-release.outputs.new-version }}"
+            RELEASE_NOTES="${{ needs.prepare-release.outputs.release-notes }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+            # Generate release notes from commits since last tag
+            LAST_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+            if [ -n "$LAST_TAG" ]; then
+              RELEASE_NOTES=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s" --reverse)
+            else
+              RELEASE_NOTES="Initial release"
+            fi
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "release-notes<<EOF" >> $GITHUB_OUTPUT
+          echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ steps.release-info.outputs.version }}
+          release_name: Release v${{ steps.release-info.outputs.version }}
+          body: |
+            ## Release v${{ steps.release-info.outputs.version }}
+
+            ${{ steps.release-info.outputs.release-notes }}
+
+            ### Artifacts
+            - Docker Image: `${{ env.ECR_REGISTRY }}/nx-monorepo:${{ steps.release-info.outputs.version }}`
+            - NPM Packages: Published to npm registry
+            - Build Artifacts: Available in release assets
+
+            ### Deployment
+            This release will be automatically deployed to production.
+
+            ---
+            🤖 Generated with [Claude Code](https://claude.com/claude-code)
+          draft: false
+          prerelease: ${{ contains(steps.release-info.outputs.version, 'alpha') || contains(steps.release-info.outputs.version, 'beta') || contains(steps.release-info.outputs.version, 'rc') }}
+
+  trigger-deployment:
+    runs-on: ubuntu-latest
+    needs: [create-github-release]
+    if: (github.event_name == 'workflow_dispatch' && !inputs.dry_run) || github.event_name == 'push'
+    steps:
+      - name: Trigger deployment workflow
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'deploy.yaml',
+              ref: 'main',
+              inputs: {
+                environment: 'production',
+                force_deploy: 'true'
+              }
+            });
+
+  notify-release:
+    runs-on: ubuntu-latest
+    needs: [create-github-release, trigger-deployment]
+    if: always() && (needs.create-github-release.result == 'success' || needs.create-github-release.result == 'failure')
+    steps:
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ needs.prepare-release.outputs.new-version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Notify Slack on success
+        if: needs.create-github-release.result == 'success'
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_MESSAGE: |
+            🎉 Release v${{ steps.version.outputs.version }} has been published!
+
+            📦 Packages published to NPM
+            🐳 Docker image tagged and pushed
+            🚀 Production deployment triggered
+
+            Check the release: ${{ github.server_url }}/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.version }}
+
+      - name: Notify Slack on failure
+        if: needs.create-github-release.result == 'failure'
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: danger
+          SLACK_MESSAGE: |
+            ❌ Release v${{ steps.version.outputs.version }} failed!
+
+            Please check the workflow logs for details.
+
+  release-summary:
+    runs-on: ubuntu-latest
+    needs: [prepare-release, create-github-release, trigger-deployment]
+    if: always()
+    steps:
+      - name: Release Summary
+        run: |
+          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ needs.prepare-release.outputs.new-version }}"
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              echo "🔍 **Dry Run**: Release v$VERSION (simulation only)" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "📦 **Version**: v$VERSION" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+            echo "📦 **Version**: v$VERSION" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Actor**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.create-github-release.result }}" = "success" ]; then
+            echo "✅ **Status**: Release created successfully" >> $GITHUB_STEP_SUMMARY
+            echo "🔗 **Release URL**: ${{ github.server_url }}/${{ github.repository }}/releases/tag/v$VERSION" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ inputs.dry_run }}" != "true" ]; then
+            echo "❌ **Status**: Release failed" >> $GITHUB_STEP_SUMMARY
+          fi

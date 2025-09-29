@@ -1,0 +1,1643 @@
+openapi: 3.1.0
+info:
+  title: Admin Dashboard API
+  description: |
+    Administrative dashboard and monitoring API for the NX monorepo template.
+
+    This API provides comprehensive administrative functionality including:
+    - User management and role assignment
+    - System monitoring and health checks
+    - Analytics and reporting
+    - Configuration management
+    - Audit logs and security monitoring
+    - Content moderation and compliance
+    - Billing and subscription management
+
+    ## Access Control
+    All endpoints in this API require administrator privileges. Different operations
+    may require specific admin roles (admin, super_admin).
+
+    ## Rate Limiting
+    Admin endpoints have higher rate limits:
+    - Admin users: 5000 requests per hour
+    - Super admin users: 10000 requests per hour
+
+    ## Audit Logging
+    All admin actions are automatically logged for compliance and security purposes.
+  version: 1.0.0
+  contact:
+    name: Admin API Support
+    email: admin-api@company.com
+    url: https://docs.company.com/admin-api
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.company.com/v1/admin
+    description: Production admin server
+  - url: https://staging-api.company.com/v1/admin
+    description: Staging admin server
+  - url: https://dev-api.company.com/v1/admin
+    description: Development admin server
+  - url: http://localhost:3000/api/v1/admin
+    description: Local development admin server
+
+security:
+  - BearerAuth: []
+
+paths:
+  /dashboard:
+    get:
+      summary: Get dashboard overview
+      description: Retrieve high-level metrics and system status for the admin dashboard
+      operationId: getDashboardOverview
+      tags:
+        - Dashboard
+      responses:
+        '200':
+          description: Dashboard data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardOverview'
+              examples:
+                dashboard_overview:
+                  summary: Complete dashboard overview
+                  value:
+                    users:
+                      total: 12567
+                      active: 8934
+                      new_today: 45
+                      new_this_week: 312
+                    projects:
+                      total: 3421
+                      active: 2187
+                      completed: 1098
+                      new_today: 23
+                    system:
+                      status: healthy
+                      uptime: 99.9
+                      response_time: 145
+                      error_rate: 0.02
+                    revenue:
+                      total: 156789.50
+                      this_month: 23456.78
+                      growth_rate: 12.5
+                    alerts:
+                      critical: 0
+                      warning: 3
+                      info: 7
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users:
+    get:
+      summary: List all users
+      description: Retrieve a paginated list of all users with advanced filtering options
+      operationId: listUsers
+      tags:
+        - User Management
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/SortParam'
+        - name: role
+          in: query
+          description: Filter by user role
+          schema:
+            $ref: '#/components/schemas/UserRole'
+        - name: status
+          in: query
+          description: Filter by user status
+          schema:
+            type: string
+            enum: [active, inactive, suspended, pending_verification]
+        - name: search
+          in: query
+          description: Search users by name, email, or company
+          schema:
+            type: string
+            minLength: 3
+            maxLength: 100
+        - name: created_after
+          in: query
+          description: Filter users created after this date
+          schema:
+            type: string
+            format: date-time
+        - name: created_before
+          in: query
+          description: Filter users created before this date
+          schema:
+            type: string
+            format: date-time
+        - name: last_login_after
+          in: query
+          description: Filter users who logged in after this date
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Users retrieved successfully
+          headers:
+            X-Total-Count:
+              description: Total number of users
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminUserView'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationInfo'
+                  filters:
+                    type: object
+                    description: Applied filters summary
+              examples:
+                users_list:
+                  summary: List of users with admin details
+                  value:
+                    data:
+                      - id: 550e8400-e29b-41d4-a716-446655440000
+                        email: john.doe@company.com
+                        first_name: John
+                        last_name: Doe
+                        role: user
+                        status: active
+                        is_verified: true
+                        created_at: "2024-01-15T10:30:00Z"
+                        last_login: "2024-01-20T14:45:00Z"
+                        projects_count: 5
+                        storage_used: 2.5
+                    pagination:
+                      page: 1
+                      limit: 50
+                      total_pages: 251
+                      has_next: true
+                      has_previous: false
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/UserIdParam'
+
+    get:
+      summary: Get user details
+      description: Retrieve detailed information about a specific user
+      operationId: getUserDetails
+      tags:
+        - User Management
+      responses:
+        '200':
+          description: User details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserDetailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      summary: Update user
+      description: Update user information and settings (admin only)
+      operationId: updateUser
+      tags:
+        - User Management
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUserUpdateRequest'
+      responses:
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserDetailed'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      summary: Delete user
+      description: Permanently delete a user account and all associated data
+      operationId: deleteUser
+      tags:
+        - User Management
+      responses:
+        '204':
+          description: User deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Cannot delete user with active dependencies
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/{userId}/suspend:
+    parameters:
+      - $ref: '#/components/parameters/UserIdParam'
+
+    post:
+      summary: Suspend user
+      description: Suspend a user account temporarily
+      operationId: suspendUser
+      tags:
+        - User Management
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reason
+              properties:
+                reason:
+                  type: string
+                  description: Reason for suspension
+                  enum: [policy_violation, spam, security_concern, payment_issue, other]
+                notes:
+                  type: string
+                  description: Additional notes about the suspension
+                  maxLength: 1000
+                duration_days:
+                  type: integer
+                  description: Suspension duration in days (null for indefinite)
+                  minimum: 1
+                  maximum: 365
+      responses:
+        '200':
+          description: User suspended successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: User suspended successfully
+                  suspended_until:
+                    type: string
+                    format: date-time
+                    example: "2024-02-15T10:30:00Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: User already suspended
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/{userId}/unsuspend:
+    parameters:
+      - $ref: '#/components/parameters/UserIdParam'
+
+    post:
+      summary: Unsuspend user
+      description: Remove suspension from a user account
+      operationId: unsuspendUser
+      tags:
+        - User Management
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes:
+                  type: string
+                  description: Notes about the unsuspension
+                  maxLength: 1000
+      responses:
+        '200':
+          description: User unsuspended successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: User unsuspended successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: User is not suspended
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/{userId}/impersonate:
+    parameters:
+      - $ref: '#/components/parameters/UserIdParam'
+
+    post:
+      summary: Impersonate user
+      description: Generate an access token to impersonate a user (super admin only)
+      operationId: impersonateUser
+      tags:
+        - User Management
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  description: Reason for impersonation (required for audit)
+                  maxLength: 500
+                duration_minutes:
+                  type: integer
+                  description: Impersonation session duration in minutes
+                  minimum: 5
+                  maximum: 480
+                  default: 60
+      responses:
+        '200':
+          description: Impersonation token generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  impersonation_token:
+                    type: string
+                    description: JWT token for impersonating the user
+                  expires_at:
+                    type: string
+                    format: date-time
+                  message:
+                    type: string
+                    example: Impersonation session started successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Insufficient permissions (super admin required)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects:
+    get:
+      summary: List all projects
+      description: Retrieve a paginated list of all projects across the system
+      operationId: listAllProjects
+      tags:
+        - Project Management
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/SortParam'
+        - name: status
+          in: query
+          description: Filter by project status
+          schema:
+            type: string
+            enum: [planning, active, on_hold, completed, cancelled]
+        - name: owner
+          in: query
+          description: Filter by project owner
+          schema:
+            type: string
+            format: uuid
+        - name: search
+          in: query
+          description: Search projects by name or description
+          schema:
+            type: string
+            minLength: 3
+      responses:
+        '200':
+          description: Projects retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminProjectView'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /system/health:
+    get:
+      summary: System health check
+      description: Get comprehensive system health status and metrics
+      operationId: getSystemHealth
+      tags:
+        - System Monitoring
+      responses:
+        '200':
+          description: System health retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemHealth'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /system/metrics:
+    get:
+      summary: System metrics
+      description: Get detailed system performance metrics
+      operationId: getSystemMetrics
+      tags:
+        - System Monitoring
+      parameters:
+        - name: timeframe
+          in: query
+          description: Metrics timeframe
+          schema:
+            type: string
+            enum: [1h, 6h, 24h, 7d, 30d]
+            default: 24h
+        - name: metrics
+          in: query
+          description: Specific metrics to retrieve (comma-separated)
+          schema:
+            type: string
+            example: cpu,memory,disk,network
+      responses:
+        '200':
+          description: System metrics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemMetrics'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /audit-logs:
+    get:
+      summary: Get audit logs
+      description: Retrieve system audit logs with filtering and search capabilities
+      operationId: getAuditLogs
+      tags:
+        - Audit & Compliance
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: user_id
+          in: query
+          description: Filter by user ID
+          schema:
+            type: string
+            format: uuid
+        - name: action
+          in: query
+          description: Filter by action type
+          schema:
+            type: string
+            enum: [login, logout, create, update, delete, suspend, unsuspend, impersonate]
+        - name: resource_type
+          in: query
+          description: Filter by resource type
+          schema:
+            type: string
+            enum: [user, project, task, file, system]
+        - name: start_date
+          in: query
+          description: Filter logs from this date
+          schema:
+            type: string
+            format: date-time
+        - name: end_date
+          in: query
+          description: Filter logs until this date
+          schema:
+            type: string
+            format: date-time
+        - name: ip_address
+          in: query
+          description: Filter by IP address
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Audit logs retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditLog'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /analytics/reports:
+    get:
+      summary: Get analytics reports
+      description: Generate various analytics reports for the platform
+      operationId: getAnalyticsReports
+      tags:
+        - Analytics & Reporting
+      parameters:
+        - name: report_type
+          in: query
+          required: true
+          description: Type of report to generate
+          schema:
+            type: string
+            enum: [user_activity, project_performance, revenue, system_usage, security]
+        - name: start_date
+          in: query
+          description: Report start date
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          description: Report end date
+          schema:
+            type: string
+            format: date
+        - name: format
+          in: query
+          description: Report format
+          schema:
+            type: string
+            enum: [json, csv, pdf]
+            default: json
+        - name: granularity
+          in: query
+          description: Data granularity for time-series reports
+          schema:
+            type: string
+            enum: [hour, day, week, month]
+            default: day
+      responses:
+        '200':
+          description: Report generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsReport'
+            text/csv:
+              schema:
+                type: string
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /settings:
+    get:
+      summary: Get system settings
+      description: Retrieve current system configuration settings
+      operationId: getSystemSettings
+      tags:
+        - Configuration
+      responses:
+        '200':
+          description: System settings retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemSettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      summary: Update system settings
+      description: Update system configuration settings (super admin only)
+      operationId: updateSystemSettings
+      tags:
+        - Configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SystemSettingsUpdateRequest'
+      responses:
+        '200':
+          description: System settings updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemSettings'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Insufficient permissions (super admin required)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /notifications:
+    post:
+      summary: Send system notification
+      description: Send a system-wide notification to users
+      operationId: sendSystemNotification
+      tags:
+        - Notifications
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SystemNotificationRequest'
+      responses:
+        '201':
+          description: Notification sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Notification sent successfully
+                  notification_id:
+                    type: string
+                    format: uuid
+                  recipients_count:
+                    type: integer
+                    example: 1250
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    UserIdParam:
+      name: userId
+      in: path
+      required: true
+      description: Unique identifier of the user
+      schema:
+        type: string
+        format: uuid
+
+    PageParam:
+      name: page
+      in: query
+      description: Page number for pagination (1-based)
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    LimitParam:
+      name: limit
+      in: query
+      description: Number of items per page
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+
+    SortParam:
+      name: sort
+      in: query
+      description: Sort order for results
+      schema:
+        type: string
+        enum: [name_asc, name_desc, created_asc, created_desc, updated_asc, updated_desc, last_login_asc, last_login_desc]
+        default: created_desc
+
+  schemas:
+    DashboardOverview:
+      type: object
+      required:
+        - users
+        - projects
+        - system
+      properties:
+        users:
+          type: object
+          properties:
+            total:
+              type: integer
+              description: Total number of users
+            active:
+              type: integer
+              description: Number of active users
+            new_today:
+              type: integer
+              description: New users registered today
+            new_this_week:
+              type: integer
+              description: New users registered this week
+        projects:
+          type: object
+          properties:
+            total:
+              type: integer
+              description: Total number of projects
+            active:
+              type: integer
+              description: Number of active projects
+            completed:
+              type: integer
+              description: Number of completed projects
+            new_today:
+              type: integer
+              description: New projects created today
+        system:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [healthy, degraded, unhealthy]
+            uptime:
+              type: number
+              format: float
+              description: System uptime percentage
+            response_time:
+              type: number
+              format: float
+              description: Average response time in milliseconds
+            error_rate:
+              type: number
+              format: float
+              description: Error rate percentage
+        revenue:
+          type: object
+          properties:
+            total:
+              type: number
+              format: decimal
+              description: Total revenue
+            this_month:
+              type: number
+              format: decimal
+              description: Revenue this month
+            growth_rate:
+              type: number
+              format: float
+              description: Growth rate percentage
+        alerts:
+          type: object
+          properties:
+            critical:
+              type: integer
+              description: Number of critical alerts
+            warning:
+              type: integer
+              description: Number of warning alerts
+            info:
+              type: integer
+              description: Number of info alerts
+
+    AdminUserView:
+      type: object
+      required:
+        - id
+        - email
+        - first_name
+        - last_name
+        - role
+        - status
+        - is_verified
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        first_name:
+          type: string
+        last_name:
+          type: string
+        role:
+          $ref: '#/components/schemas/UserRole'
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        is_verified:
+          type: boolean
+        is_active:
+          type: boolean
+        last_login:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        projects_count:
+          type: integer
+          description: Number of projects owned by user
+        storage_used:
+          type: number
+          format: float
+          description: Storage used in GB
+        suspension_info:
+          type: object
+          properties:
+            is_suspended:
+              type: boolean
+            suspended_until:
+              type: string
+              format: date-time
+            reason:
+              type: string
+
+    AdminUserDetailed:
+      allOf:
+        - $ref: '#/components/schemas/AdminUserView'
+        - type: object
+          properties:
+            phone:
+              type: string
+            company:
+              type: string
+            job_title:
+              type: string
+            bio:
+              type: string
+            location:
+              type: string
+            timezone:
+              type: string
+            language:
+              type: string
+            two_factor_enabled:
+              type: boolean
+            login_history:
+              type: array
+              items:
+                $ref: '#/components/schemas/LoginHistoryEntry'
+            subscription:
+              $ref: '#/components/schemas/UserSubscription'
+            billing_info:
+              $ref: '#/components/schemas/BillingInfo'
+
+    AdminUserUpdateRequest:
+      type: object
+      properties:
+        first_name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        last_name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        email:
+          type: string
+          format: email
+        role:
+          $ref: '#/components/schemas/UserRole'
+        is_active:
+          type: boolean
+        is_verified:
+          type: boolean
+        phone:
+          type: string
+        company:
+          type: string
+        notes:
+          type: string
+          description: Admin notes about the user
+          maxLength: 2000
+
+    UserRole:
+      type: string
+      enum: [user, premium, admin, super_admin]
+
+    UserStatus:
+      type: string
+      enum: [active, inactive, suspended, pending_verification]
+
+    AdminProjectView:
+      type: object
+      required:
+        - id
+        - name
+        - status
+        - owner_id
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [planning, active, on_hold, completed, cancelled]
+        owner_id:
+          type: string
+          format: uuid
+        owner_name:
+          type: string
+        owner_email:
+          type: string
+          format: email
+        team_size:
+          type: integer
+        tasks_count:
+          type: integer
+        budget:
+          type: number
+          format: decimal
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    SystemHealth:
+      type: object
+      required:
+        - status
+        - timestamp
+        - components
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        timestamp:
+          type: string
+          format: date-time
+        uptime:
+          type: object
+          properties:
+            seconds:
+              type: integer
+            human_readable:
+              type: string
+              example: "15 days, 4 hours, 23 minutes"
+        components:
+          type: object
+          properties:
+            database:
+              $ref: '#/components/schemas/ComponentHealth'
+            redis:
+              $ref: '#/components/schemas/ComponentHealth'
+            storage:
+              $ref: '#/components/schemas/ComponentHealth'
+            email_service:
+              $ref: '#/components/schemas/ComponentHealth'
+            external_apis:
+              $ref: '#/components/schemas/ComponentHealth'
+        performance:
+          type: object
+          properties:
+            response_time:
+              type: object
+              properties:
+                avg:
+                  type: number
+                  format: float
+                p95:
+                  type: number
+                  format: float
+                p99:
+                  type: number
+                  format: float
+            error_rate:
+              type: number
+              format: float
+            throughput:
+              type: number
+              format: float
+              description: Requests per second
+
+    ComponentHealth:
+      type: object
+      required:
+        - status
+        - response_time
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        response_time:
+          type: number
+          format: float
+          description: Response time in milliseconds
+        last_checked:
+          type: string
+          format: date-time
+        error_message:
+          type: string
+          description: Error message if component is unhealthy
+
+    SystemMetrics:
+      type: object
+      required:
+        - timestamp
+        - timeframe
+        - metrics
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        timeframe:
+          type: string
+          example: 24h
+        metrics:
+          type: object
+          properties:
+            cpu:
+              type: object
+              properties:
+                current:
+                  type: number
+                  format: float
+                average:
+                  type: number
+                  format: float
+                peak:
+                  type: number
+                  format: float
+                history:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/MetricDataPoint'
+            memory:
+              type: object
+              properties:
+                used:
+                  type: number
+                  description: Used memory in GB
+                total:
+                  type: number
+                  description: Total memory in GB
+                percentage:
+                  type: number
+                  format: float
+                history:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/MetricDataPoint'
+            disk:
+              type: object
+              properties:
+                used:
+                  type: number
+                  description: Used disk space in GB
+                total:
+                  type: number
+                  description: Total disk space in GB
+                percentage:
+                  type: number
+                  format: float
+            network:
+              type: object
+              properties:
+                bytes_in:
+                  type: number
+                  description: Bytes received per second
+                bytes_out:
+                  type: number
+                  description: Bytes sent per second
+
+    MetricDataPoint:
+      type: object
+      required:
+        - timestamp
+        - value
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        value:
+          type: number
+          format: float
+
+    AuditLog:
+      type: object
+      required:
+        - id
+        - user_id
+        - action
+        - resource_type
+        - timestamp
+        - ip_address
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        user_email:
+          type: string
+          format: email
+        action:
+          type: string
+          enum: [login, logout, create, update, delete, suspend, unsuspend, impersonate, view, download]
+        resource_type:
+          type: string
+          enum: [user, project, task, file, system, settings]
+        resource_id:
+          type: string
+          description: ID of the affected resource
+        details:
+          type: object
+          description: Additional details about the action
+        ip_address:
+          type: string
+        user_agent:
+          type: string
+        success:
+          type: boolean
+          description: Whether the action was successful
+        error_message:
+          type: string
+          description: Error message if action failed
+        timestamp:
+          type: string
+          format: date-time
+
+    AnalyticsReport:
+      type: object
+      required:
+        - report_type
+        - generated_at
+        - data
+      properties:
+        report_type:
+          type: string
+        generated_at:
+          type: string
+          format: date-time
+        parameters:
+          type: object
+          description: Report generation parameters
+        data:
+          type: object
+          description: Report data (structure varies by report type)
+        summary:
+          type: object
+          description: High-level summary of the report
+        metadata:
+          type: object
+          properties:
+            total_records:
+              type: integer
+            data_quality_score:
+              type: number
+              format: float
+            confidence_level:
+              type: number
+              format: float
+
+    SystemSettings:
+      type: object
+      properties:
+        general:
+          type: object
+          properties:
+            site_name:
+              type: string
+            site_description:
+              type: string
+            support_email:
+              type: string
+              format: email
+            maintenance_mode:
+              type: boolean
+        security:
+          type: object
+          properties:
+            password_min_length:
+              type: integer
+              minimum: 8
+              maximum: 128
+            password_require_special_chars:
+              type: boolean
+            session_timeout_minutes:
+              type: integer
+            max_login_attempts:
+              type: integer
+            lockout_duration_minutes:
+              type: integer
+        features:
+          type: object
+          properties:
+            user_registration_enabled:
+              type: boolean
+            email_verification_required:
+              type: boolean
+            two_factor_auth_enabled:
+              type: boolean
+            file_uploads_enabled:
+              type: boolean
+            max_file_size_mb:
+              type: integer
+        notifications:
+          type: object
+          properties:
+            email_notifications_enabled:
+              type: boolean
+            push_notifications_enabled:
+              type: boolean
+            sms_notifications_enabled:
+              type: boolean
+        rate_limiting:
+          type: object
+          properties:
+            api_rate_limit_per_hour:
+              type: integer
+            upload_rate_limit_per_day:
+              type: integer
+            premium_multiplier:
+              type: number
+              format: float
+
+    SystemSettingsUpdateRequest:
+      type: object
+      properties:
+        general:
+          type: object
+          properties:
+            site_name:
+              type: string
+              maxLength: 100
+            site_description:
+              type: string
+              maxLength: 500
+            support_email:
+              type: string
+              format: email
+            maintenance_mode:
+              type: boolean
+        security:
+          type: object
+          properties:
+            password_min_length:
+              type: integer
+              minimum: 8
+              maximum: 128
+            password_require_special_chars:
+              type: boolean
+            session_timeout_minutes:
+              type: integer
+              minimum: 5
+              maximum: 10080
+            max_login_attempts:
+              type: integer
+              minimum: 3
+              maximum: 10
+            lockout_duration_minutes:
+              type: integer
+              minimum: 1
+              maximum: 1440
+        features:
+          type: object
+          properties:
+            user_registration_enabled:
+              type: boolean
+            email_verification_required:
+              type: boolean
+            two_factor_auth_enabled:
+              type: boolean
+            file_uploads_enabled:
+              type: boolean
+            max_file_size_mb:
+              type: integer
+              minimum: 1
+              maximum: 1000
+
+    SystemNotificationRequest:
+      type: object
+      required:
+        - title
+        - message
+        - type
+      properties:
+        title:
+          type: string
+          maxLength: 100
+          example: System Maintenance Scheduled
+        message:
+          type: string
+          maxLength: 1000
+          example: We will be performing scheduled maintenance on Sunday from 2:00 AM to 4:00 AM EST
+        type:
+          type: string
+          enum: [info, warning, critical, maintenance]
+        target_audience:
+          type: string
+          enum: [all_users, premium_users, admin_users, specific_users]
+          default: all_users
+        target_user_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Required when target_audience is 'specific_users'
+        channels:
+          type: array
+          items:
+            type: string
+            enum: [email, push, in_app, sms]
+          default: [in_app]
+        scheduled_at:
+          type: string
+          format: date-time
+          description: Schedule notification for future delivery
+        expires_at:
+          type: string
+          format: date-time
+          description: When the notification should expire
+
+    LoginHistoryEntry:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        ip_address:
+          type: string
+        user_agent:
+          type: string
+        success:
+          type: boolean
+        location:
+          type: string
+
+    UserSubscription:
+      type: object
+      properties:
+        plan:
+          type: string
+          enum: [free, premium, enterprise]
+        status:
+          type: string
+          enum: [active, cancelled, expired, trial]
+        started_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        auto_renew:
+          type: boolean
+
+    BillingInfo:
+      type: object
+      properties:
+        customer_id:
+          type: string
+        payment_method:
+          type: string
+          enum: [credit_card, paypal, bank_transfer]
+        last_payment:
+          type: object
+          properties:
+            amount:
+              type: number
+              format: decimal
+            date:
+              type: string
+              format: date-time
+            status:
+              type: string
+              enum: [successful, failed, pending]
+        total_spent:
+          type: number
+          format: decimal
+
+    PaginationInfo:
+      type: object
+      required:
+        - page
+        - limit
+        - total_pages
+        - has_next
+        - has_previous
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        limit:
+          type: integer
+          minimum: 1
+        total_pages:
+          type: integer
+          minimum: 0
+        has_next:
+          type: boolean
+        has_previous:
+          type: boolean
+
+    ProblemDetail:
+      type: object
+      description: RFC 7807 Problem Details for HTTP APIs
+      required:
+        - type
+        - title
+        - status
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+
+  responses:
+    BadRequest:
+      description: Bad Request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    Forbidden:
+      description: Forbidden
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    NotFound:
+      description: Not Found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    Conflict:
+      description: Conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    UnprocessableEntity:
+      description: Unprocessable Entity
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    TooManyRequests:
+      description: Too Many Requests
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    InternalServerError:
+      description: Internal Server Error
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+tags:
+  - name: Dashboard
+    description: Admin dashboard overview and summary data
+  - name: User Management
+    description: Administrative user management operations
+  - name: Project Management
+    description: Administrative project oversight
+  - name: System Monitoring
+    description: System health and performance monitoring
+  - name: Audit & Compliance
+    description: Audit logs and compliance reporting
+  - name: Analytics & Reporting
+    description: Business intelligence and analytics
+  - name: Configuration
+    description: System configuration and settings
+  - name: Notifications
+    description: System-wide notification management
+
+externalDocs:
+  description: Admin API Documentation
+  url: https://docs.company.com/admin-api
