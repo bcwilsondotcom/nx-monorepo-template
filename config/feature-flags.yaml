@@ -1,0 +1,534 @@
+# Feature Flags Configuration Schema
+# Comprehensive schema for defining feature flags across the NX monorepo
+
+# Schema version for backward compatibility
+schema_version: "1.0"
+
+# Global configuration
+global:
+  default_environment: "development"
+  default_fallback_enabled: true
+  evaluation_timeout_ms: 1000
+  cache_ttl_seconds: 300
+  max_cache_size: 10000
+
+# Environment-specific configurations
+environments:
+  development:
+    provider: "in-memory"
+    fallback_provider: "environment"
+    cache_enabled: true
+    debug_mode: true
+    hot_reload: true
+
+  staging:
+    provider: "flipt"
+    fallback_provider: "environment"
+    cache_enabled: true
+    debug_mode: false
+    hot_reload: true
+    flipt_endpoint: "http://flipt-staging:8080"
+
+  production:
+    provider: "flipt"
+    fallback_provider: "environment"
+    cache_enabled: true
+    debug_mode: false
+    hot_reload: false
+    flipt_endpoint: "https://flipt.production.company.com"
+
+# Feature flag categories and metadata
+categories:
+  new_features:
+    description: "Beta and experimental features"
+    default_enabled: false
+    requires_approval: true
+    max_rollout_percentage: 50
+
+  operational:
+    description: "System operational controls"
+    default_enabled: true
+    requires_approval: false
+    max_rollout_percentage: 100
+
+  ab_testing:
+    description: "A/B testing experiments"
+    default_enabled: true
+    requires_approval: true
+    max_rollout_percentage: 100
+
+  kill_switches:
+    description: "Emergency kill switches"
+    default_enabled: true
+    requires_approval: false
+    max_rollout_percentage: 100
+    priority: "critical"
+
+# User segments for targeting
+segments:
+  beta_users:
+    type: "user_attribute"
+    criteria:
+      - attribute: "user_type"
+        operator: "equals"
+        value: "beta"
+      - attribute: "beta_opted_in"
+        operator: "equals"
+        value: true
+
+  premium_users:
+    type: "user_attribute"
+    criteria:
+      - attribute: "subscription_tier"
+        operator: "in"
+        values: ["premium", "enterprise"]
+      - attribute: "subscription_active"
+        operator: "equals"
+        value: true
+
+  internal_users:
+    type: "user_attribute"
+    criteria:
+      - attribute: "email"
+        operator: "ends_with"
+        value: "@company.com"
+
+  mobile_users:
+    type: "context_attribute"
+    criteria:
+      - attribute: "device_type"
+        operator: "equals"
+        value: "mobile"
+
+  geographic_us:
+    type: "context_attribute"
+    criteria:
+      - attribute: "country"
+        operator: "equals"
+        value: "US"
+
+  new_users:
+    type: "user_attribute"
+    criteria:
+      - attribute: "registration_date"
+        operator: "after"
+        value: "30d"
+
+  high_traffic_times:
+    type: "temporal"
+    criteria:
+      - attribute: "hour_of_day"
+        operator: "between"
+        values: [9, 17]
+      - attribute: "day_of_week"
+        operator: "in"
+        values: ["monday", "tuesday", "wednesday", "thursday", "friday"]
+
+# Feature flag definitions
+feature_flags:
+  # New Features Category
+  new_dashboard_ui:
+    name: "New Dashboard UI"
+    description: "Enable the redesigned dashboard interface with improved UX and performance"
+    category: "new_features"
+    type: "boolean"
+    default_value: false
+    metadata:
+      owner: "frontend-team"
+      created_date: "2024-01-01"
+      updated_date: "2024-01-15"
+      jira_ticket: "FEAT-001"
+      tags: ["ui", "beta", "dashboard", "redesign"]
+      documentation_url: "https://docs.company.com/features/new-dashboard"
+      impact_level: "medium"
+      technical_debt_score: 2
+    targeting:
+      - segment: "beta_users"
+        enabled: true
+        rollout_percentage: 100
+      - segment: "internal_users"
+        enabled: true
+        rollout_percentage: 100
+    fallback_value: false
+
+  experimental_api_v2:
+    name: "Experimental API v2"
+    description: "Enable access to the new v2 API endpoints with GraphQL and enhanced REST features"
+    category: "new_features"
+    type: "boolean"
+    default_value: false
+    metadata:
+      owner: "backend-team"
+      created_date: "2024-01-15"
+      updated_date: "2024-02-01"
+      jira_ticket: "API-002"
+      tags: ["api", "experimental", "v2", "graphql"]
+      documentation_url: "https://docs.company.com/api/v2"
+      impact_level: "high"
+      technical_debt_score: 1
+    targeting:
+      - segment: "premium_users"
+        enabled: true
+        rollout_percentage: 80
+      - segment: "internal_users"
+        enabled: true
+        rollout_percentage: 100
+    fallback_value: false
+
+  ai_powered_search:
+    name: "AI-Powered Search"
+    description: "Enable AI-enhanced search functionality with semantic search and ML recommendations"
+    category: "new_features"
+    type: "boolean"
+    default_value: false
+    metadata:
+      owner: "ai-team"
+      created_date: "2024-02-01"
+      updated_date: "2024-02-15"
+      jira_ticket: "AI-001"
+      tags: ["ai", "search", "experimental", "ml"]
+      documentation_url: "https://docs.company.com/features/ai-search"
+      impact_level: "high"
+      technical_debt_score: 3
+      cost_impact: "high"
+    targeting:
+      - segment: "beta_users"
+        enabled: true
+        rollout_percentage: 25
+      - segment: "premium_users"
+        enabled: true
+        rollout_percentage: 50
+    fallback_value: false
+
+  # Operational Category
+  maintenance_mode:
+    name: "Maintenance Mode"
+    description: "Enable maintenance mode to display maintenance page and disable core functionality"
+    category: "operational"
+    type: "boolean"
+    default_value: false
+    metadata:
+      owner: "devops-team"
+      created_date: "2024-01-01"
+      updated_date: "2024-01-01"
+      tags: ["maintenance", "operational", "system"]
+      priority: "critical"
+      emergency_contact: "devops-oncall@company.com"
+      impact_level: "critical"
+    targeting: []
+    fallback_value: false
+
+  rate_limiting_strict:
+    name: "Strict Rate Limiting"
+    description: "Enable stricter rate limiting during high traffic periods to maintain system stability"
+    category: "operational"
+    type: "boolean"
+    default_value: false
+    metadata:
+      owner: "backend-team"
+      created_date: "2024-01-10"
+      updated_date: "2024-01-20"
+      tags: ["rate-limiting", "performance", "operational"]
+      priority: "high"
+      impact_level: "medium"
+    targeting:
+      - segment: "high_traffic_times"
+        enabled: true
+        rollout_percentage: 100
+    fallback_value: false
+
+  enhanced_logging:
+    name: "Enhanced Logging"
+    description: "Enable detailed logging for debugging and monitoring with structured logs"
+    category: "operational"
+    type: "boolean"
+    default_value: true
+    metadata:
+      owner: "devops-team"
+      created_date: "2024-01-05"
+      updated_date: "2024-01-10"
+      tags: ["logging", "monitoring", "operational", "debugging"]
+      impact_level: "low"
+      cost_impact: "medium"
+    targeting: []
+    fallback_value: true
+
+  # A/B Testing Category
+  checkout_flow_variant:
+    name: "Checkout Flow Variant"
+    description: "A/B test different checkout flow designs to optimize conversion rates"
+    category: "ab_testing"
+    type: "variant"
+    default_value: "control"
+    metadata:
+      owner: "product-team"
+      created_date: "2024-01-20"
+      updated_date: "2024-02-01"
+      experiment_id: "EXP-001"
+      tags: ["ab-test", "checkout", "conversion", "ux"]
+      experiment_end_date: "2024-03-01"
+      success_metrics: ["conversion_rate", "cart_abandonment", "time_to_complete"]
+      impact_level: "high"
+    variants:
+      control:
+        name: "Control (Original)"
+        description: "Original 3-step checkout flow"
+        weight: 34
+        metadata:
+          flow_type: "original"
+          steps: 3
+          payment_methods: ["card", "paypal"]
+      streamlined:
+        name: "Streamlined Flow"
+        description: "Simplified 2-step checkout with guest option"
+        weight: 33
+        metadata:
+          flow_type: "streamlined"
+          steps: 2
+          payment_methods: ["card", "paypal", "apple_pay", "google_pay"]
+      progressive:
+        name: "Progressive Flow"
+        description: "Progressive disclosure 4-step flow"
+        weight: 33
+        metadata:
+          flow_type: "progressive"
+          steps: 4
+          payment_methods: ["card", "paypal", "apple_pay", "google_pay", "bnpl"]
+    targeting:
+      - segment: "mobile_users"
+        enabled: true
+        variant_override: "streamlined"
+        rollout_percentage: 100
+      - segment: "new_users"
+        enabled: true
+        rollout_percentage: 100
+    fallback_value: "control"
+
+  recommendation_algorithm:
+    name: "Recommendation Algorithm"
+    description: "Test different recommendation algorithms for product suggestions and personalization"
+    category: "ab_testing"
+    type: "variant"
+    default_value: "collaborative_filtering"
+    metadata:
+      owner: "ml-team"
+      created_date: "2024-02-01"
+      updated_date: "2024-02-10"
+      experiment_id: "EXP-002"
+      tags: ["ab-test", "recommendations", "ml", "personalization"]
+      experiment_end_date: "2024-04-01"
+      success_metrics: ["click_through_rate", "conversion_rate", "revenue_per_user"]
+      impact_level: "medium"
+      cost_impact: "high"
+    variants:
+      collaborative_filtering:
+        name: "Collaborative Filtering"
+        description: "Traditional collaborative filtering approach"
+        weight: 40
+        metadata:
+          algorithm: "collaborative_filtering"
+          model_version: "v1.2"
+          max_recommendations: 10
+          compute_cost: "low"
+      content_based:
+        name: "Content-Based"
+        description: "Content-based filtering with item features"
+        weight: 30
+        metadata:
+          algorithm: "content_based"
+          model_version: "v2.1"
+          max_recommendations: 12
+          compute_cost: "medium"
+      hybrid_ml:
+        name: "Hybrid ML"
+        description: "Advanced hybrid ML with deep learning"
+        weight: 30
+        metadata:
+          algorithm: "hybrid_ml"
+          model_version: "v3.0"
+          max_recommendations: 15
+          compute_cost: "high"
+    targeting:
+      - segment: "premium_users"
+        enabled: true
+        variant_override: "hybrid_ml"
+        rollout_percentage: 100
+    fallback_value: "collaborative_filtering"
+
+  # Kill Switches Category
+  external_integrations:
+    name: "External Integrations"
+    description: "Emergency kill switch for all external API integrations and third-party services"
+    category: "kill_switches"
+    type: "boolean"
+    default_value: true
+    metadata:
+      owner: "backend-team"
+      created_date: "2024-01-01"
+      updated_date: "2024-01-01"
+      tags: ["kill-switch", "integrations", "emergency", "external-apis"]
+      priority: "critical"
+      emergency_contact: "backend-oncall@company.com"
+      impact_level: "critical"
+      dependent_services: ["payment-gateway", "email-service", "analytics"]
+    targeting: []
+    fallback_value: true
+
+  email_notifications:
+    name: "Email Notifications"
+    description: "Kill switch for email notification system to prevent spam or system overload"
+    category: "kill_switches"
+    type: "boolean"
+    default_value: true
+    metadata:
+      owner: "platform-team"
+      created_date: "2024-01-01"
+      updated_date: "2024-01-01"
+      tags: ["kill-switch", "email", "notifications"]
+      priority: "medium"
+      impact_level: "medium"
+      dependent_services: ["email-service", "notification-queue"]
+    targeting: []
+    fallback_value: true
+
+  payment_processing:
+    name: "Payment Processing"
+    description: "Emergency kill switch for payment processing to prevent financial issues"
+    category: "kill_switches"
+    type: "boolean"
+    default_value: true
+    metadata:
+      owner: "payments-team"
+      created_date: "2024-01-01"
+      updated_date: "2024-01-01"
+      tags: ["kill-switch", "payments", "emergency", "financial"]
+      priority: "critical"
+      emergency_contact: "payments-oncall@company.com"
+      impact_level: "critical"
+      compliance_requirements: ["PCI-DSS", "SOX"]
+      dependent_services: ["payment-gateway", "fraud-detection", "accounting"]
+    targeting: []
+    fallback_value: true
+
+  # Performance and Resource Management
+  image_optimization:
+    name: "Image Optimization"
+    description: "Enable advanced image optimization and compression for better performance"
+    category: "operational"
+    type: "boolean"
+    default_value: true
+    metadata:
+      owner: "frontend-team"
+      created_date: "2024-01-12"
+      updated_date: "2024-01-25"
+      tags: ["performance", "images", "optimization", "cdn"]
+      impact_level: "low"
+      cost_impact: "medium"
+    targeting: []
+    fallback_value: true
+
+  cdn_caching_aggressive:
+    name: "Aggressive CDN Caching"
+    description: "Enable more aggressive CDN caching strategies for improved performance"
+    category: "operational"
+    type: "boolean"
+    default_value: false
+    metadata:
+      owner: "devops-team"
+      created_date: "2024-01-25"
+      updated_date: "2024-02-01"
+      tags: ["performance", "cdn", "caching"]
+      impact_level: "medium"
+      cost_impact: "low"
+    targeting:
+      - segment: "geographic_us"
+        enabled: true
+        rollout_percentage: 50
+    fallback_value: false
+
+  # Configuration-based flags
+  max_api_requests_per_minute:
+    name: "Max API Requests Per Minute"
+    description: "Maximum number of API requests allowed per minute per user"
+    category: "operational"
+    type: "number"
+    default_value: 1000
+    metadata:
+      owner: "backend-team"
+      created_date: "2024-01-10"
+      updated_date: "2024-01-15"
+      tags: ["rate-limiting", "api", "performance"]
+      impact_level: "medium"
+      min_value: 100
+      max_value: 10000
+    targeting:
+      - segment: "premium_users"
+        enabled: true
+        value_override: 5000
+      - segment: "beta_users"
+        enabled: true
+        value_override: 2000
+    fallback_value: 1000
+
+  search_results_per_page:
+    name: "Search Results Per Page"
+    description: "Number of search results to display per page"
+    category: "operational"
+    type: "number"
+    default_value: 20
+    metadata:
+      owner: "frontend-team"
+      created_date: "2024-01-20"
+      updated_date: "2024-01-20"
+      tags: ["search", "pagination", "ux"]
+      impact_level: "low"
+      min_value: 10
+      max_value: 100
+    targeting:
+      - segment: "mobile_users"
+        enabled: true
+        value_override: 10
+    fallback_value: 20
+
+# Validation rules
+validation:
+  required_fields: ["name", "description", "category", "type", "default_value", "metadata.owner"]
+  allowed_types: ["boolean", "string", "number", "variant"]
+  allowed_categories: ["new_features", "operational", "ab_testing", "kill_switches"]
+  rollout_percentage_max: 100
+  variant_weight_sum: 100
+  metadata_requirements:
+    - field: "owner"
+      type: "string"
+      required: true
+    - field: "created_date"
+      type: "date"
+      required: true
+    - field: "tags"
+      type: "array"
+      required: true
+      min_length: 1
+
+# Monitoring and alerting
+monitoring:
+  flag_evaluation_metrics:
+    - "evaluation_count"
+    - "evaluation_latency"
+    - "cache_hit_rate"
+    - "error_rate"
+
+  alert_conditions:
+    - metric: "error_rate"
+      threshold: 0.05
+      duration: "5m"
+      severity: "warning"
+    - metric: "evaluation_latency"
+      threshold: 500
+      duration: "2m"
+      severity: "critical"
+
+  dashboards:
+    - name: "Feature Flags Overview"
+      url: "https://grafana.company.com/d/feature-flags"
+    - name: "A/B Testing Results"
+      url: "https://analytics.company.com/ab-tests"

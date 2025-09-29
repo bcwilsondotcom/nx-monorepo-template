@@ -1,0 +1,1530 @@
+asyncapi: 2.6.0
+info:
+  title: Project Events API
+  version: 1.0.0
+  description: |
+    Event-driven architecture for project management events in the NX monorepo template.
+
+    This API defines the event schema and channels for real-time project management
+    including project lifecycle events, task updates, team collaboration, and system notifications.
+
+    ## Event Flow
+    - Project events are published to respective channels based on event type
+    - Consumers can subscribe to specific channels or use wildcard subscriptions
+    - All events include correlation IDs for tracing and debugging
+    - Events are persisted for replay and audit purposes
+
+    ## Message Ordering
+    - Events within the same project maintain ordering
+    - Cross-project events may arrive out of order
+    - Use sequence numbers and timestamps for ordering when needed
+
+    ## Error Handling
+    - Failed event processing triggers retry with exponential backoff
+    - Dead letter queues capture permanently failed events
+    - Circuit breakers prevent cascade failures
+  contact:
+    name: Events API Team
+    email: events-api@company.com
+    url: https://docs.company.com/events
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+defaultContentType: application/json
+
+servers:
+  production:
+    url: wss://events.company.com/v1
+    protocol: wss
+    description: Production WebSocket server
+    security:
+      - bearerAuth: []
+  staging:
+    url: wss://staging-events.company.com/v1
+    protocol: wss
+    description: Staging WebSocket server
+    security:
+      - bearerAuth: []
+  rabbitmq-prod:
+    url: amqps://rabbitmq.company.com:5671
+    protocol: amqp
+    description: Production RabbitMQ server
+    security:
+      - userPassword: []
+  kafka-prod:
+    url: kafka.company.com:9093
+    protocol: kafka-secure
+    description: Production Kafka cluster
+    security:
+      - saslScram: []
+
+channels:
+  project/events:
+    description: Channel for all project-related events
+    parameters:
+      projectId:
+        $ref: '#/components/parameters/projectId'
+    subscribe:
+      summary: Subscribe to project events
+      description: Listen for project lifecycle events, updates, and status changes
+      operationId: subscribeProjectEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/ProjectCreated'
+          - $ref: '#/components/messages/ProjectUpdated'
+          - $ref: '#/components/messages/ProjectCompleted'
+          - $ref: '#/components/messages/ProjectDeleted'
+          - $ref: '#/components/messages/ProjectStatusChanged'
+    publish:
+      summary: Publish project events
+      description: Send project-related events to subscribers
+      operationId: publishProjectEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/ProjectCreated'
+          - $ref: '#/components/messages/ProjectUpdated'
+          - $ref: '#/components/messages/ProjectCompleted'
+          - $ref: '#/components/messages/ProjectDeleted'
+          - $ref: '#/components/messages/ProjectStatusChanged'
+    bindings:
+      ws:
+        method: GET
+        query:
+          type: object
+          properties:
+            project_id:
+              type: string
+              format: uuid
+              description: Filter events for specific project
+            event_types:
+              type: string
+              description: Comma-separated list of event types to subscribe to
+      amqp:
+        is: routingKey
+        exchange:
+          name: project.events
+          type: topic
+          durable: true
+        queue:
+          name: project.events.{projectId}
+          durable: true
+          exclusive: false
+          autoDelete: false
+      kafka:
+        topic: project.events
+        partitions: 10
+        replicas: 3
+        configs:
+          cleanup.policy: compact
+          retention.ms: 604800000
+
+  task/events:
+    description: Channel for task-related events
+    parameters:
+      projectId:
+        $ref: '#/components/parameters/projectId'
+      taskId:
+        $ref: '#/components/parameters/taskId'
+    subscribe:
+      summary: Subscribe to task events
+      description: Listen for task creation, updates, assignments, and completion events
+      operationId: subscribeTaskEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/TaskCreated'
+          - $ref: '#/components/messages/TaskUpdated'
+          - $ref: '#/components/messages/TaskAssigned'
+          - $ref: '#/components/messages/TaskCompleted'
+          - $ref: '#/components/messages/TaskDeleted'
+    publish:
+      summary: Publish task events
+      description: Send task-related events to subscribers
+      operationId: publishTaskEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/TaskCreated'
+          - $ref: '#/components/messages/TaskUpdated'
+          - $ref: '#/components/messages/TaskAssigned'
+          - $ref: '#/components/messages/TaskCompleted'
+          - $ref: '#/components/messages/TaskDeleted'
+    bindings:
+      ws:
+        method: GET
+        query:
+          type: object
+          properties:
+            project_id:
+              type: string
+              format: uuid
+            task_id:
+              type: string
+              format: uuid
+            assignee_id:
+              type: string
+              format: uuid
+      amqp:
+        is: routingKey
+        exchange:
+          name: task.events
+          type: topic
+          durable: true
+        queue:
+          name: task.events.{projectId}.{taskId}
+          durable: true
+      kafka:
+        topic: task.events
+        partitions: 20
+        replicas: 3
+
+  team/events:
+    description: Channel for team collaboration events
+    parameters:
+      projectId:
+        $ref: '#/components/parameters/projectId'
+    subscribe:
+      summary: Subscribe to team events
+      description: Listen for team member additions, removals, role changes, and collaboration events
+      operationId: subscribeTeamEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/TeamMemberAdded'
+          - $ref: '#/components/messages/TeamMemberRemoved'
+          - $ref: '#/components/messages/TeamRoleChanged'
+          - $ref: '#/components/messages/TeamCommentAdded'
+    publish:
+      summary: Publish team events
+      description: Send team collaboration events to subscribers
+      operationId: publishTeamEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/TeamMemberAdded'
+          - $ref: '#/components/messages/TeamMemberRemoved'
+          - $ref: '#/components/messages/TeamRoleChanged'
+          - $ref: '#/components/messages/TeamCommentAdded'
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: team.events
+          type: topic
+          durable: true
+      kafka:
+        topic: team.events
+        partitions: 5
+        replicas: 3
+
+  file/events:
+    description: Channel for file management events
+    parameters:
+      projectId:
+        $ref: '#/components/parameters/projectId'
+    subscribe:
+      summary: Subscribe to file events
+      description: Listen for file uploads, deletions, sharing, and access events
+      operationId: subscribeFileEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/FileUploaded'
+          - $ref: '#/components/messages/FileDeleted'
+          - $ref: '#/components/messages/FileShared'
+          - $ref: '#/components/messages/FileAccessed'
+    publish:
+      summary: Publish file events
+      description: Send file management events to subscribers
+      operationId: publishFileEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/FileUploaded'
+          - $ref: '#/components/messages/FileDeleted'
+          - $ref: '#/components/messages/FileShared'
+          - $ref: '#/components/messages/FileAccessed'
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: file.events
+          type: topic
+          durable: true
+      kafka:
+        topic: file.events
+        partitions: 15
+        replicas: 3
+
+  system/events:
+    description: Channel for system-wide events and notifications
+    subscribe:
+      summary: Subscribe to system events
+      description: Listen for system maintenance, alerts, and global notifications
+      operationId: subscribeSystemEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/SystemMaintenance'
+          - $ref: '#/components/messages/SystemAlert'
+          - $ref: '#/components/messages/SystemNotification'
+    publish:
+      summary: Publish system events
+      description: Send system-wide events and notifications
+      operationId: publishSystemEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/SystemMaintenance'
+          - $ref: '#/components/messages/SystemAlert'
+          - $ref: '#/components/messages/SystemNotification'
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: system.events
+          type: fanout
+          durable: true
+      kafka:
+        topic: system.events
+        partitions: 3
+        replicas: 3
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    userPassword:
+      type: userPassword
+    saslScram:
+      type: scramSha256
+
+  parameters:
+    projectId:
+      description: Unique identifier for a project
+      schema:
+        type: string
+        format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+
+    taskId:
+      description: Unique identifier for a task
+      schema:
+        type: string
+        format: uuid
+        example: 123e4567-e89b-12d3-a456-426614174000
+
+  messageTraits:
+    commonHeaders:
+      headers:
+        type: object
+        properties:
+          event_id:
+            type: string
+            format: uuid
+            description: Unique identifier for this event
+          correlation_id:
+            type: string
+            format: uuid
+            description: Correlation ID for tracing related events
+          user_id:
+            type: string
+            format: uuid
+            description: ID of the user who triggered this event
+          timestamp:
+            type: string
+            format: date-time
+            description: When the event occurred
+          version:
+            type: string
+            description: Event schema version
+            example: "1.0"
+          source:
+            type: string
+            description: Source service that generated the event
+            example: "project-service"
+        required:
+          - event_id
+          - timestamp
+          - version
+          - source
+
+  messages:
+    ProjectCreated:
+      name: ProjectCreated
+      title: Project Created Event
+      summary: Triggered when a new project is created
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/ProjectCreatedPayload'
+      examples:
+        - name: Basic project creation
+          summary: A new project was created
+          payload:
+            event_type: project.created
+            data:
+              project:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                name: Website Redesign
+                description: Complete redesign of the company website
+                status: planning
+                owner_id: 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+                created_at: "2024-01-15T10:30:00Z"
+      bindings:
+        amqp:
+          contentEncoding: gzip
+          messageType: ProjectCreated
+        kafka:
+          key:
+            type: string
+            enum:
+              - project_id
+          partitionKey: project_id
+
+    ProjectUpdated:
+      name: ProjectUpdated
+      title: Project Updated Event
+      summary: Triggered when a project is updated
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/ProjectUpdatedPayload'
+      examples:
+        - name: Project status update
+          summary: Project status was changed
+          payload:
+            event_type: project.updated
+            data:
+              project:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                name: Website Redesign
+                status: active
+                updated_at: "2024-01-20T14:45:00Z"
+              changes:
+                - field: status
+                  old_value: planning
+                  new_value: active
+                - field: progress
+                  old_value: 0
+                  new_value: 15
+
+    ProjectCompleted:
+      name: ProjectCompleted
+      title: Project Completed Event
+      summary: Triggered when a project is marked as completed
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/ProjectCompletedPayload'
+      examples:
+        - name: Project completion
+          summary: A project was successfully completed
+          payload:
+            event_type: project.completed
+            data:
+              project:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                name: Website Redesign
+                status: completed
+                completed_at: "2024-06-15T16:30:00Z"
+                final_budget: 73500
+                duration_days: 152
+
+    ProjectDeleted:
+      name: ProjectDeleted
+      title: Project Deleted Event
+      summary: Triggered when a project is deleted
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/ProjectDeletedPayload'
+
+    ProjectStatusChanged:
+      name: ProjectStatusChanged
+      title: Project Status Changed Event
+      summary: Triggered when a project status changes
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/ProjectStatusChangedPayload'
+
+    TaskCreated:
+      name: TaskCreated
+      title: Task Created Event
+      summary: Triggered when a new task is created
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/TaskCreatedPayload'
+      examples:
+        - name: New task creation
+          summary: A new task was created and assigned
+          payload:
+            event_type: task.created
+            data:
+              task:
+                id: 123e4567-e89b-12d3-a456-426614174000
+                title: Design login page
+                description: Create wireframes and mockups for the user login page
+                status: todo
+                priority: high
+                project_id: 550e8400-e29b-41d4-a716-446655440000
+                assignee_id: 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+                due_date: "2024-02-15"
+                created_at: "2024-01-20T09:15:00Z"
+
+    TaskUpdated:
+      name: TaskUpdated
+      title: Task Updated Event
+      summary: Triggered when a task is updated
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/TaskUpdatedPayload'
+
+    TaskAssigned:
+      name: TaskAssigned
+      title: Task Assigned Event
+      summary: Triggered when a task is assigned to a team member
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/TaskAssignedPayload'
+
+    TaskCompleted:
+      name: TaskCompleted
+      title: Task Completed Event
+      summary: Triggered when a task is marked as completed
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/TaskCompletedPayload'
+
+    TaskDeleted:
+      name: TaskDeleted
+      title: Task Deleted Event
+      summary: Triggered when a task is deleted
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/TaskDeletedPayload'
+
+    TeamMemberAdded:
+      name: TeamMemberAdded
+      title: Team Member Added Event
+      summary: Triggered when a team member is added to a project
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/TeamMemberAddedPayload'
+
+    TeamMemberRemoved:
+      name: TeamMemberRemoved
+      title: Team Member Removed Event
+      summary: Triggered when a team member is removed from a project
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/TeamMemberRemovedPayload'
+
+    TeamRoleChanged:
+      name: TeamRoleChanged
+      title: Team Role Changed Event
+      summary: Triggered when a team member's role is changed
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/TeamRoleChangedPayload'
+
+    TeamCommentAdded:
+      name: TeamCommentAdded
+      title: Team Comment Added Event
+      summary: Triggered when a comment is added to a project or task
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/TeamCommentAddedPayload'
+
+    FileUploaded:
+      name: FileUploaded
+      title: File Uploaded Event
+      summary: Triggered when a file is uploaded to a project
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/FileUploadedPayload'
+
+    FileDeleted:
+      name: FileDeleted
+      title: File Deleted Event
+      summary: Triggered when a file is deleted from a project
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/FileDeletedPayload'
+
+    FileShared:
+      name: FileShared
+      title: File Shared Event
+      summary: Triggered when a file is shared with team members
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/FileSharedPayload'
+
+    FileAccessed:
+      name: FileAccessed
+      title: File Accessed Event
+      summary: Triggered when a file is accessed or downloaded
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/FileAccessedPayload'
+
+    SystemMaintenance:
+      name: SystemMaintenance
+      title: System Maintenance Event
+      summary: Triggered for system maintenance notifications
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/SystemMaintenancePayload'
+
+    SystemAlert:
+      name: SystemAlert
+      title: System Alert Event
+      summary: Triggered for system alerts and warnings
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/SystemAlertPayload'
+
+    SystemNotification:
+      name: SystemNotification
+      title: System Notification Event
+      summary: Triggered for general system notifications
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/SystemNotificationPayload'
+
+  schemas:
+    ProjectCreatedPayload:
+      type: object
+      required:
+        - event_type
+        - data
+      properties:
+        event_type:
+          type: string
+          const: project.created
+        data:
+          type: object
+          required:
+            - project
+          properties:
+            project:
+              $ref: '#/components/schemas/Project'
+
+    ProjectUpdatedPayload:
+      type: object
+      required:
+        - event_type
+        - data
+      properties:
+        event_type:
+          type: string
+          const: project.updated
+        data:
+          type: object
+          required:
+            - project
+            - changes
+          properties:
+            project:
+              $ref: '#/components/schemas/Project'
+            changes:
+              type: array
+              items:
+                $ref: '#/components/schemas/FieldChange'
+
+    ProjectCompletedPayload:
+      type: object
+      required:
+        - event_type
+        - data
+      properties:
+        event_type:
+          type: string
+          const: project.completed
+        data:
+          type: object
+          required:
+            - project
+          properties:
+            project:
+              allOf:
+                - $ref: '#/components/schemas/Project'
+                - type: object
+                  properties:
+                    completed_at:
+                      type: string
+                      format: date-time
+                    final_budget:
+                      type: number
+                      format: decimal
+                    duration_days:
+                      type: integer
+
+    ProjectDeletedPayload:
+      type: object
+      required:
+        - event_type
+        - data
+      properties:
+        event_type:
+          type: string
+          const: project.deleted
+        data:
+          type: object
+          required:
+            - project_id
+            - deleted_by
+          properties:
+            project_id:
+              type: string
+              format: uuid
+            project_name:
+              type: string
+            deleted_by:
+              type: string
+              format: uuid
+            deleted_at:
+              type: string
+              format: date-time
+            reason:
+              type: string
+
+    ProjectStatusChangedPayload:
+      type: object
+      required:
+        - event_type
+        - data
+      properties:
+        event_type:
+          type: string
+          const: project.status_changed
+        data:
+          type: object
+          required:
+            - project
+            - old_status
+            - new_status
+          properties:
+            project:
+              $ref: '#/components/schemas/Project'
+            old_status:
+              type: string
+              enum: [planning, active, on_hold, completed, cancelled]
+            new_status:
+              type: string
+              enum: [planning, active, on_hold, completed, cancelled]
+            changed_by:
+              type: string
+              format: uuid
+            reason:
+              type: string
+
+    TaskCreatedPayload:
+      type: object
+      required:
+        - event_type
+        - data
+      properties:
+        event_type:
+          type: string
+          const: task.created
+        data:
+          type: object
+          required:
+            - task
+          properties:
+            task:
+              $ref: '#/components/schemas/Task'
+
+    TaskUpdatedPayload:
+      type: object
+      required:
+        - event_type
+        - data
+      properties:
+        event_type:
+          type: string
+          const: task.updated
+        data:
+          type: object
+          required:
+            - task
+            - changes
+          properties:
+            task:
+              $ref: '#/components/schemas/Task'
+            changes:
+              type: array
+              items:
+                $ref: '#/components/schemas/FieldChange'
+
+    TaskAssignedPayload:
+      type: object
+      required:
+        - event_type
+        - data
+      properties:
+        event_type:
+          type: string
+          const: task.assigned
+        data:
+          type: object
+          required:
+            - task
+            - assignee
+          properties:
+            task:
+              $ref: '#/components/schemas/Task'
+            assignee:
+              $ref: '#/components/schemas/User'
+            assigned_by:
+              type: string
+              format: uuid
+            previous_assignee:
+              type: string
+              format: uuid
+
+    TaskCompletedPayload:
+      type: object
+      required:
+        - event_type
+        - data
+      properties:
+        event_type:
+          type: string
+          const: task.completed
+        data:
+          type: object
+          required:
+            - task
+          properties:
+            task:
+              allOf:
+                - $ref: '#/components/schemas/Task'
+                - type: object
+                  properties:
+                    completed_at:
+                      type: string
+                      format: date-time
+                    actual_hours:
+                      type: number
+                      format: decimal
+            completion_notes:
+              type: string
+
+    TaskDeletedPayload:
+      type: object
+      required:
+        - event_type
+        - data
+      properties:
+        event_type:
+          type: string
+          const: task.deleted
+        data:
+          type: object
+          required:
+            - task_id
+            - project_id
+            - deleted_by
+          properties:
+            task_id:
+              type: string
+              format: uuid
+            task_title:
+              type: string
+            project_id:
+              type: string
+              format: uuid
+            deleted_by:
+              type: string
+              format: uuid
+            deleted_at:
+              type: string
+              format: date-time
+            reason:
+              type: string
+
+    TeamMemberAddedPayload:
+      type: object
+      required:
+        - event_type
+        - data
+      properties:
+        event_type:
+          type: string
+          const: team.member_added
+        data:
+          type: object
+          required:
+            - project_id
+            - member
+            - added_by
+          properties:
+            project_id:
+              type: string
+              format: uuid
+            member:
+              $ref: '#/components/schemas/TeamMember'
+            added_by:
+              type: string
+              format: uuid
+            added_at:
+              type: string
+              format: date-time
+
+    TeamMemberRemovedPayload:
+      type: object
+      required:
+        - event_type
+        - data
+      properties:
+        event_type:
+          type: string
+          const: team.member_removed
+        data:
+          type: object
+          required:
+            - project_id
+            - member_id
+            - removed_by
+          properties:
+            project_id:
+              type: string
+              format: uuid
+            member_id:
+              type: string
+              format: uuid
+            member_name:
+              type: string
+            removed_by:
+              type: string
+              format: uuid
+            removed_at:
+              type: string
+              format: date-time
+            reason:
+              type: string
+
+    TeamRoleChangedPayload:
+      type: object
+      required:
+        - event_type
+        - data
+      properties:
+        event_type:
+          type: string
+          const: team.role_changed
+        data:
+          type: object
+          required:
+            - project_id
+            - member
+            - old_role
+            - new_role
+          properties:
+            project_id:
+              type: string
+              format: uuid
+            member:
+              $ref: '#/components/schemas/TeamMember'
+            old_role:
+              type: string
+              enum: [owner, admin, developer, designer, tester, viewer]
+            new_role:
+              type: string
+              enum: [owner, admin, developer, designer, tester, viewer]
+            changed_by:
+              type: string
+              format: uuid
+            changed_at:
+              type: string
+              format: date-time
+
+    TeamCommentAddedPayload:
+      type: object
+      required:
+        - event_type
+        - data
+      properties:
+        event_type:
+          type: string
+          const: team.comment_added
+        data:
+          type: object
+          required:
+            - comment
+          properties:
+            comment:
+              $ref: '#/components/schemas/Comment'
+
+    FileUploadedPayload:
+      type: object
+      required:
+        - event_type
+        - data
+      properties:
+        event_type:
+          type: string
+          const: file.uploaded
+        data:
+          type: object
+          required:
+            - file
+          properties:
+            file:
+              $ref: '#/components/schemas/ProjectFile'
+
+    FileDeletedPayload:
+      type: object
+      required:
+        - event_type
+        - data
+      properties:
+        event_type:
+          type: string
+          const: file.deleted
+        data:
+          type: object
+          required:
+            - file_id
+            - project_id
+            - deleted_by
+          properties:
+            file_id:
+              type: string
+              format: uuid
+            filename:
+              type: string
+            project_id:
+              type: string
+              format: uuid
+            deleted_by:
+              type: string
+              format: uuid
+            deleted_at:
+              type: string
+              format: date-time
+
+    FileSharedPayload:
+      type: object
+      required:
+        - event_type
+        - data
+      properties:
+        event_type:
+          type: string
+          const: file.shared
+        data:
+          type: object
+          required:
+            - file
+            - shared_with
+            - shared_by
+          properties:
+            file:
+              $ref: '#/components/schemas/ProjectFile'
+            shared_with:
+              type: array
+              items:
+                type: string
+                format: uuid
+            shared_by:
+              type: string
+              format: uuid
+            shared_at:
+              type: string
+              format: date-time
+            permissions:
+              type: array
+              items:
+                type: string
+                enum: [read, write, download, share]
+
+    FileAccessedPayload:
+      type: object
+      required:
+        - event_type
+        - data
+      properties:
+        event_type:
+          type: string
+          const: file.accessed
+        data:
+          type: object
+          required:
+            - file_id
+            - accessed_by
+            - access_type
+          properties:
+            file_id:
+              type: string
+              format: uuid
+            filename:
+              type: string
+            project_id:
+              type: string
+              format: uuid
+            accessed_by:
+              type: string
+              format: uuid
+            access_type:
+              type: string
+              enum: [view, download, preview]
+            accessed_at:
+              type: string
+              format: date-time
+            ip_address:
+              type: string
+            user_agent:
+              type: string
+
+    SystemMaintenancePayload:
+      type: object
+      required:
+        - event_type
+        - data
+      properties:
+        event_type:
+          type: string
+          const: system.maintenance
+        data:
+          type: object
+          required:
+            - maintenance
+          properties:
+            maintenance:
+              type: object
+              required:
+                - id
+                - type
+                - status
+                - scheduled_start
+                - estimated_duration
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                type:
+                  type: string
+                  enum: [scheduled, emergency, security_update, feature_deployment]
+                status:
+                  type: string
+                  enum: [scheduled, in_progress, completed, cancelled]
+                title:
+                  type: string
+                description:
+                  type: string
+                scheduled_start:
+                  type: string
+                  format: date-time
+                scheduled_end:
+                  type: string
+                  format: date-time
+                actual_start:
+                  type: string
+                  format: date-time
+                actual_end:
+                  type: string
+                  format: date-time
+                estimated_duration:
+                  type: integer
+                  description: Estimated duration in minutes
+                affected_services:
+                  type: array
+                  items:
+                    type: string
+                impact_level:
+                  type: string
+                  enum: [low, medium, high, critical]
+
+    SystemAlertPayload:
+      type: object
+      required:
+        - event_type
+        - data
+      properties:
+        event_type:
+          type: string
+          const: system.alert
+        data:
+          type: object
+          required:
+            - alert
+          properties:
+            alert:
+              type: object
+              required:
+                - id
+                - level
+                - message
+                - source
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                level:
+                  type: string
+                  enum: [info, warning, error, critical]
+                category:
+                  type: string
+                  enum: [performance, security, availability, capacity, data_integrity]
+                message:
+                  type: string
+                description:
+                  type: string
+                source:
+                  type: string
+                  description: Service or component that generated the alert
+                metric_name:
+                  type: string
+                metric_value:
+                  type: number
+                threshold:
+                  type: number
+                url:
+                  type: string
+                  format: uri
+                  description: Link to more details
+                resolved_at:
+                  type: string
+                  format: date-time
+                resolved_by:
+                  type: string
+
+    SystemNotificationPayload:
+      type: object
+      required:
+        - event_type
+        - data
+      properties:
+        event_type:
+          type: string
+          const: system.notification
+        data:
+          type: object
+          required:
+            - notification
+          properties:
+            notification:
+              type: object
+              required:
+                - id
+                - type
+                - title
+                - message
+                - target_audience
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                type:
+                  type: string
+                  enum: [announcement, feature_update, policy_change, promotion, reminder]
+                title:
+                  type: string
+                message:
+                  type: string
+                target_audience:
+                  type: string
+                  enum: [all_users, premium_users, admin_users, specific_users]
+                target_user_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                priority:
+                  type: string
+                  enum: [low, normal, high, urgent]
+                channels:
+                  type: array
+                  items:
+                    type: string
+                    enum: [email, push, in_app, sms]
+                action_url:
+                  type: string
+                  format: uri
+                expires_at:
+                  type: string
+                  format: date-time
+
+    Project:
+      type: object
+      required:
+        - id
+        - name
+        - status
+        - owner_id
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [planning, active, on_hold, completed, cancelled]
+        owner_id:
+          type: string
+          format: uuid
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        budget:
+          type: number
+          format: decimal
+        priority:
+          type: string
+          enum: [low, medium, high, critical]
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Task:
+      type: object
+      required:
+        - id
+        - title
+        - status
+        - project_id
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [todo, in_progress, review, done, blocked]
+        priority:
+          type: string
+          enum: [low, medium, high, critical]
+        project_id:
+          type: string
+          format: uuid
+        assignee_id:
+          type: string
+          format: uuid
+        due_date:
+          type: string
+          format: date
+        estimated_hours:
+          type: number
+          format: decimal
+        actual_hours:
+          type: number
+          format: decimal
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    User:
+      type: object
+      required:
+        - id
+        - email
+        - first_name
+        - last_name
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        first_name:
+          type: string
+        last_name:
+          type: string
+        avatar_url:
+          type: string
+          format: uri
+
+    TeamMember:
+      type: object
+      required:
+        - user_id
+        - role
+        - joined_at
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [owner, admin, developer, designer, tester, viewer]
+        permissions:
+          type: array
+          items:
+            type: string
+        joined_at:
+          type: string
+          format: date-time
+
+    Comment:
+      type: object
+      required:
+        - id
+        - content
+        - author_id
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        author_id:
+          type: string
+          format: uuid
+        author_name:
+          type: string
+        project_id:
+          type: string
+          format: uuid
+        task_id:
+          type: string
+          format: uuid
+        parent_comment_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ProjectFile:
+      type: object
+      required:
+        - id
+        - filename
+        - size
+        - mime_type
+        - project_id
+        - uploaded_by
+        - uploaded_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        filename:
+          type: string
+        original_filename:
+          type: string
+        description:
+          type: string
+        size:
+          type: integer
+        mime_type:
+          type: string
+        category:
+          type: string
+          enum: [document, image, video, audio, archive, other]
+        project_id:
+          type: string
+          format: uuid
+        uploaded_by:
+          type: string
+          format: uuid
+        download_url:
+          type: string
+          format: uri
+        uploaded_at:
+          type: string
+          format: date-time
+
+    FieldChange:
+      type: object
+      required:
+        - field
+        - old_value
+        - new_value
+      properties:
+        field:
+          type: string
+          description: Name of the field that changed
+        old_value:
+          description: Previous value of the field
+        new_value:
+          description: New value of the field
+        change_type:
+          type: string
+          enum: [create, update, delete]
+          description: Type of change made
+
+tags:
+  - name: Projects
+    description: Project lifecycle events
+  - name: Tasks
+    description: Task management events
+  - name: Team
+    description: Team collaboration events
+  - name: Files
+    description: File management events
+  - name: System
+    description: System-wide events and notifications
+
+externalDocs:
+  description: Event-Driven Architecture Documentation
+  url: https://docs.company.com/events

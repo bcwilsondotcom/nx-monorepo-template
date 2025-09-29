@@ -1,0 +1,1324 @@
+openapi: 3.1.0
+info:
+  title: Webhooks Management API
+  description: |
+    Webhook subscription and management API for the NX monorepo template.
+
+    This API provides comprehensive webhook functionality including:
+    - Webhook endpoint registration and management
+    - Event subscription and filtering
+    - Delivery tracking and retry mechanisms
+    - Security features including signature verification
+    - Webhook testing and debugging tools
+    - Real-time delivery status monitoring
+
+    ## Webhook Events
+    The system supports various event types:
+    - User events (registration, login, profile updates)
+    - Project events (creation, updates, completion)
+    - Task events (assignment, completion, status changes)
+    - File events (upload, deletion, sharing)
+    - System events (maintenance, alerts)
+
+    ## Security
+    All webhook deliveries are signed with HMAC-SHA256 for verification.
+    Endpoints must be HTTPS and respond within 30 seconds.
+
+    ## Retry Policy
+    Failed deliveries are retried with exponential backoff:
+    - Immediate retry
+    - 1 minute later
+    - 5 minutes later
+    - 15 minutes later
+    - 1 hour later
+    - Maximum of 5 retry attempts
+  version: 1.0.0
+  contact:
+    name: Webhooks API Support
+    email: webhooks-api@company.com
+    url: https://docs.company.com/webhooks
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.company.com/v1
+    description: Production server
+  - url: https://staging-api.company.com/v1
+    description: Staging server
+  - url: https://dev-api.company.com/v1
+    description: Development server
+  - url: http://localhost:3000/api/v1
+    description: Local development server
+
+security:
+  - BearerAuth: []
+  - ApiKeyAuth: []
+
+paths:
+  /webhooks:
+    get:
+      summary: List webhooks
+      description: Retrieve a list of registered webhook endpoints
+      operationId: listWebhooks
+      tags:
+        - Webhooks
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: status
+          in: query
+          description: Filter by webhook status
+          schema:
+            $ref: '#/components/schemas/WebhookStatus'
+        - name: event_type
+          in: query
+          description: Filter by subscribed event type
+          schema:
+            $ref: '#/components/schemas/EventType'
+      responses:
+        '200':
+          description: Webhooks retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Webhook'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationInfo'
+              examples:
+                webhooks_list:
+                  summary: List of registered webhooks
+                  value:
+                    data:
+                      - id: 550e8400-e29b-41d4-a716-446655440000
+                        url: https://api.example.com/webhooks/project-updates
+                        description: Project management integration
+                        status: active
+                        events: [project.created, project.updated, project.completed]
+                        created_at: "2024-01-15T10:30:00Z"
+                        last_delivery: "2024-01-20T14:45:00Z"
+                        success_rate: 98.5
+                    pagination:
+                      page: 1
+                      limit: 20
+                      total_pages: 3
+                      has_next: true
+                      has_previous: false
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      summary: Create webhook
+      description: Register a new webhook endpoint
+      operationId: createWebhook
+      tags:
+        - Webhooks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookCreateRequest'
+            examples:
+              basic_webhook:
+                summary: Basic webhook registration
+                value:
+                  url: https://api.example.com/webhooks/notifications
+                  description: General notification webhook
+                  events: [user.created, project.created]
+                  active: true
+              advanced_webhook:
+                summary: Advanced webhook with filtering
+                value:
+                  url: https://api.example.com/webhooks/project-events
+                  description: Project-specific events with filtering
+                  events: [project.created, project.updated, project.completed]
+                  filters:
+                    project_status: [active, completed]
+                    owner_id: 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+                  headers:
+                    Authorization: Bearer custom-token
+                    X-Custom-Header: webhook-integration
+                  active: true
+                  verify_ssl: true
+                  timeout_seconds: 15
+      responses:
+        '201':
+          description: Webhook created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+              examples:
+                created_webhook:
+                  summary: Newly created webhook
+                  value:
+                    id: 550e8400-e29b-41d4-a716-446655440000
+                    url: https://api.example.com/webhooks/notifications
+                    description: General notification webhook
+                    secret: whsec_abc123def456ghi789
+                    status: active
+                    events: [user.created, project.created]
+                    created_at: "2024-01-25T10:30:00Z"
+                    updated_at: "2024-01-25T10:30:00Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /webhooks/{webhookId}:
+    parameters:
+      - $ref: '#/components/parameters/WebhookIdParam'
+
+    get:
+      summary: Get webhook details
+      description: Retrieve detailed information about a specific webhook
+      operationId: getWebhook
+      tags:
+        - Webhooks
+      responses:
+        '200':
+          description: Webhook details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookDetailed'
+              examples:
+                webhook_detail:
+                  summary: Detailed webhook information
+                  value:
+                    id: 550e8400-e29b-41d4-a716-446655440000
+                    url: https://api.example.com/webhooks/project-updates
+                    description: Project management integration
+                    secret: whsec_abc123def456ghi789
+                    status: active
+                    events: [project.created, project.updated, project.completed]
+                    filters:
+                      project_status: [active]
+                    headers:
+                      Authorization: Bearer custom-token
+                    verify_ssl: true
+                    timeout_seconds: 30
+                    created_at: "2024-01-15T10:30:00Z"
+                    updated_at: "2024-01-20T14:45:00Z"
+                    last_delivery: "2024-01-20T14:45:00Z"
+                    total_deliveries: 1247
+                    successful_deliveries: 1228
+                    failed_deliveries: 19
+                    success_rate: 98.5
+                    avg_response_time: 245
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      summary: Update webhook
+      description: Update webhook configuration
+      operationId: updateWebhook
+      tags:
+        - Webhooks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookUpdateRequest'
+            examples:
+              update_events:
+                summary: Update subscribed events
+                value:
+                  events: [project.created, project.updated, project.completed, task.assigned]
+                  description: Extended project and task webhook
+              update_url:
+                summary: Update endpoint URL
+                value:
+                  url: https://api.example.com/webhooks/v2/notifications
+                  description: Migrated to v2 webhook endpoint
+      responses:
+        '200':
+          description: Webhook updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      summary: Delete webhook
+      description: Remove a webhook endpoint registration
+      operationId: deleteWebhook
+      tags:
+        - Webhooks
+      responses:
+        '204':
+          description: Webhook deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /webhooks/{webhookId}/test:
+    parameters:
+      - $ref: '#/components/parameters/WebhookIdParam'
+
+    post:
+      summary: Test webhook
+      description: Send a test payload to the webhook endpoint
+      operationId: testWebhook
+      tags:
+        - Webhooks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                event_type:
+                  $ref: '#/components/schemas/EventType'
+                  description: Type of test event to send
+                  default: webhook.test
+                custom_payload:
+                  type: object
+                  description: Custom test payload (optional)
+            examples:
+              test_event:
+                summary: Send a test event
+                value:
+                  event_type: webhook.test
+              custom_test:
+                summary: Send custom test payload
+                value:
+                  event_type: project.created
+                  custom_payload:
+                    project:
+                      id: test-project-123
+                      name: Test Project
+                      status: active
+      responses:
+        '200':
+          description: Test webhook sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookTestResult'
+              examples:
+                test_success:
+                  summary: Successful test delivery
+                  value:
+                    success: true
+                    response_code: 200
+                    response_time: 245
+                    response_body: '{"status": "received"}'
+                    message: Test webhook delivered successfully
+                test_failure:
+                  summary: Failed test delivery
+                  value:
+                    success: false
+                    response_code: 500
+                    response_time: 30000
+                    error_message: Connection timeout
+                    message: Test webhook delivery failed
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /webhooks/{webhookId}/deliveries:
+    parameters:
+      - $ref: '#/components/parameters/WebhookIdParam'
+
+    get:
+      summary: List webhook deliveries
+      description: Retrieve delivery history for a specific webhook
+      operationId: listWebhookDeliveries
+      tags:
+        - Webhooks
+        - Deliveries
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: status
+          in: query
+          description: Filter by delivery status
+          schema:
+            $ref: '#/components/schemas/DeliveryStatus'
+        - name: event_type
+          in: query
+          description: Filter by event type
+          schema:
+            $ref: '#/components/schemas/EventType'
+        - name: start_date
+          in: query
+          description: Filter deliveries from this date
+          schema:
+            type: string
+            format: date-time
+        - name: end_date
+          in: query
+          description: Filter deliveries until this date
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Delivery history retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WebhookDelivery'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationInfo'
+                  summary:
+                    type: object
+                    properties:
+                      total_deliveries:
+                        type: integer
+                      successful_deliveries:
+                        type: integer
+                      failed_deliveries:
+                        type: integer
+                      avg_response_time:
+                        type: number
+                        format: float
+              examples:
+                delivery_history:
+                  summary: Webhook delivery history
+                  value:
+                    data:
+                      - id: 789e0123-e45b-67c8-d901-234567890123
+                        event_type: project.created
+                        status: success
+                        response_code: 200
+                        response_time: 245
+                        attempts: 1
+                        delivered_at: "2024-01-20T14:45:00Z"
+                      - id: 456e7890-e12b-34c5-d678-901234567890
+                        event_type: user.created
+                        status: failed
+                        response_code: 500
+                        error_message: Internal server error
+                        attempts: 3
+                        last_attempt_at: "2024-01-19T16:30:00Z"
+                        next_retry_at: "2024-01-19T17:30:00Z"
+                    pagination:
+                      page: 1
+                      limit: 20
+                      total_pages: 62
+                      has_next: true
+                      has_previous: false
+                    summary:
+                      total_deliveries: 1247
+                      successful_deliveries: 1228
+                      failed_deliveries: 19
+                      avg_response_time: 245.8
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /webhooks/{webhookId}/deliveries/{deliveryId}:
+    parameters:
+      - $ref: '#/components/parameters/WebhookIdParam'
+      - $ref: '#/components/parameters/DeliveryIdParam'
+
+    get:
+      summary: Get delivery details
+      description: Retrieve detailed information about a specific webhook delivery
+      operationId: getWebhookDelivery
+      tags:
+        - Webhooks
+        - Deliveries
+      responses:
+        '200':
+          description: Delivery details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookDeliveryDetailed'
+              examples:
+                delivery_detail:
+                  summary: Detailed delivery information
+                  value:
+                    id: 789e0123-e45b-67c8-d901-234567890123
+                    webhook_id: 550e8400-e29b-41d4-a716-446655440000
+                    event_type: project.created
+                    event_id: abc123def456
+                    status: success
+                    payload:
+                      event: project.created
+                      data:
+                        project:
+                          id: 550e8400-e29b-41d4-a716-446655440000
+                          name: New Website Project
+                          status: planning
+                      timestamp: "2024-01-20T14:45:00Z"
+                    request_headers:
+                      Content-Type: application/json
+                      X-Webhook-Signature: sha256=abc123...
+                      User-Agent: Company-Webhooks/1.0
+                    response_code: 200
+                    response_headers:
+                      Content-Type: application/json
+                      Content-Length: "27"
+                    response_body: '{"status": "received"}'
+                    response_time: 245
+                    attempts: 1
+                    created_at: "2024-01-20T14:45:00Z"
+                    delivered_at: "2024-01-20T14:45:00Z"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /webhooks/{webhookId}/deliveries/{deliveryId}/retry:
+    parameters:
+      - $ref: '#/components/parameters/WebhookIdParam'
+      - $ref: '#/components/parameters/DeliveryIdParam'
+
+    post:
+      summary: Retry webhook delivery
+      description: Manually retry a failed webhook delivery
+      operationId: retryWebhookDelivery
+      tags:
+        - Webhooks
+        - Deliveries
+      responses:
+        '200':
+          description: Delivery retry initiated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Delivery retry initiated successfully
+                  retry_id:
+                    type: string
+                    format: uuid
+                    description: ID of the new retry attempt
+        '400':
+          description: Cannot retry successful delivery
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Maximum retry attempts exceeded
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /webhooks/{webhookId}/pause:
+    parameters:
+      - $ref: '#/components/parameters/WebhookIdParam'
+
+    post:
+      summary: Pause webhook
+      description: Temporarily pause webhook deliveries
+      operationId: pauseWebhook
+      tags:
+        - Webhooks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  description: Reason for pausing the webhook
+                  maxLength: 500
+                pause_until:
+                  type: string
+                  format: date-time
+                  description: Automatically resume webhook at this time
+      responses:
+        '200':
+          description: Webhook paused successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Webhook paused successfully
+                  paused_at:
+                    type: string
+                    format: date-time
+                  resume_at:
+                    type: string
+                    format: date-time
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Webhook already paused
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /webhooks/{webhookId}/resume:
+    parameters:
+      - $ref: '#/components/parameters/WebhookIdParam'
+
+    post:
+      summary: Resume webhook
+      description: Resume paused webhook deliveries
+      operationId: resumeWebhook
+      tags:
+        - Webhooks
+      responses:
+        '200':
+          description: Webhook resumed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Webhook resumed successfully
+                  resumed_at:
+                    type: string
+                    format: date-time
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Webhook is not paused
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /webhook-events:
+    get:
+      summary: List available events
+      description: Retrieve a list of all available webhook event types
+      operationId: listWebhookEvents
+      tags:
+        - Events
+      responses:
+        '200':
+          description: Available events retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WebhookEventInfo'
+              examples:
+                events_list:
+                  summary: Available webhook events
+                  value:
+                    events:
+                      - type: user.created
+                        description: Triggered when a new user registers
+                        schema_url: https://api.company.com/schemas/user.created.json
+                        example_payload:
+                          event: user.created
+                          data:
+                            user:
+                              id: 550e8400-e29b-41d4-a716-446655440000
+                              email: john.doe@company.com
+                              first_name: John
+                              last_name: Doe
+                      - type: project.created
+                        description: Triggered when a new project is created
+                        schema_url: https://api.company.com/schemas/project.created.json
+                        example_payload:
+                          event: project.created
+                          data:
+                            project:
+                              id: 550e8400-e29b-41d4-a716-446655440000
+                              name: Website Redesign
+                              status: planning
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /webhook-events/{eventType}/schema:
+    parameters:
+      - name: eventType
+        in: path
+        required: true
+        description: The event type to get schema for
+        schema:
+          type: string
+        example: user.created
+
+    get:
+      summary: Get event schema
+      description: Retrieve the JSON schema for a specific event type
+      operationId: getEventSchema
+      tags:
+        - Events
+      responses:
+        '200':
+          description: Event schema retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                description: JSON Schema for the event
+              examples:
+                user_created_schema:
+                  summary: Schema for user.created event
+                  value:
+                    $schema: https://json-schema.org/draft/2020-12/schema
+                    type: object
+                    required: [event, data, timestamp]
+                    properties:
+                      event:
+                        type: string
+                        const: user.created
+                      data:
+                        type: object
+                        required: [user]
+                        properties:
+                          user:
+                            type: object
+                            required: [id, email, first_name, last_name]
+                            properties:
+                              id:
+                                type: string
+                                format: uuid
+                              email:
+                                type: string
+                                format: email
+                              first_name:
+                                type: string
+                              last_name:
+                                type: string
+                      timestamp:
+                        type: string
+                        format: date-time
+        '404':
+          description: Event type not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  parameters:
+    WebhookIdParam:
+      name: webhookId
+      in: path
+      required: true
+      description: Unique identifier of the webhook
+      schema:
+        type: string
+        format: uuid
+      example: 550e8400-e29b-41d4-a716-446655440000
+
+    DeliveryIdParam:
+      name: deliveryId
+      in: path
+      required: true
+      description: Unique identifier of the delivery
+      schema:
+        type: string
+        format: uuid
+      example: 789e0123-e45b-67c8-d901-234567890123
+
+    PageParam:
+      name: page
+      in: query
+      description: Page number for pagination (1-based)
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    LimitParam:
+      name: limit
+      in: query
+      description: Number of items per page
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  schemas:
+    Webhook:
+      type: object
+      required:
+        - id
+        - url
+        - status
+        - events
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          example: 550e8400-e29b-41d4-a716-446655440000
+        url:
+          type: string
+          format: uri
+          description: Webhook endpoint URL (must be HTTPS)
+          example: https://api.example.com/webhooks/notifications
+        description:
+          type: string
+          description: Human-readable description of the webhook
+          maxLength: 500
+          example: General notification webhook for project updates
+        secret:
+          type: string
+          description: Webhook signing secret for HMAC verification
+          readOnly: true
+          example: whsec_abc123def456ghi789
+        status:
+          $ref: '#/components/schemas/WebhookStatus'
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventType'
+          description: List of event types this webhook subscribes to
+          minItems: 1
+          example: [user.created, project.created, project.updated]
+        filters:
+          type: object
+          description: Event filtering criteria
+          additionalProperties: true
+          example:
+            project_status: [active, completed]
+            owner_id: 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+        headers:
+          type: object
+          description: Custom headers to include in webhook requests
+          additionalProperties:
+            type: string
+          example:
+            Authorization: Bearer custom-token
+            X-Custom-Header: webhook-integration
+        verify_ssl:
+          type: boolean
+          description: Whether to verify SSL certificates
+          default: true
+        timeout_seconds:
+          type: integer
+          description: Request timeout in seconds
+          minimum: 5
+          maximum: 60
+          default: 30
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          example: "2024-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          example: "2024-01-20T14:45:00Z"
+        last_delivery:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Timestamp of the last successful delivery
+          example: "2024-01-20T14:45:00Z"
+        success_rate:
+          type: number
+          format: float
+          readOnly: true
+          description: Success rate percentage for deliveries
+          example: 98.5
+
+    WebhookDetailed:
+      allOf:
+        - $ref: '#/components/schemas/Webhook'
+        - type: object
+          properties:
+            total_deliveries:
+              type: integer
+              readOnly: true
+              description: Total number of delivery attempts
+              example: 1247
+            successful_deliveries:
+              type: integer
+              readOnly: true
+              description: Number of successful deliveries
+              example: 1228
+            failed_deliveries:
+              type: integer
+              readOnly: true
+              description: Number of failed deliveries
+              example: 19
+            avg_response_time:
+              type: number
+              format: float
+              readOnly: true
+              description: Average response time in milliseconds
+              example: 245.8
+            paused_at:
+              type: string
+              format: date-time
+              readOnly: true
+              description: When the webhook was paused (if applicable)
+            pause_reason:
+              type: string
+              readOnly: true
+              description: Reason for pausing the webhook
+
+    WebhookCreateRequest:
+      type: object
+      required:
+        - url
+        - events
+      properties:
+        url:
+          type: string
+          format: uri
+          pattern: '^https://'
+          description: Webhook endpoint URL (must be HTTPS)
+          example: https://api.example.com/webhooks/notifications
+        description:
+          type: string
+          maxLength: 500
+          example: General notification webhook for project updates
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventType'
+          minItems: 1
+          example: [user.created, project.created]
+        filters:
+          type: object
+          description: Event filtering criteria
+          additionalProperties: true
+        headers:
+          type: object
+          description: Custom headers to include in webhook requests
+          additionalProperties:
+            type: string
+        active:
+          type: boolean
+          description: Whether the webhook should be active immediately
+          default: true
+        verify_ssl:
+          type: boolean
+          description: Whether to verify SSL certificates
+          default: true
+        timeout_seconds:
+          type: integer
+          minimum: 5
+          maximum: 60
+          default: 30
+
+    WebhookUpdateRequest:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+          pattern: '^https://'
+        description:
+          type: string
+          maxLength: 500
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventType'
+          minItems: 1
+        filters:
+          type: object
+          additionalProperties: true
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        active:
+          type: boolean
+        verify_ssl:
+          type: boolean
+        timeout_seconds:
+          type: integer
+          minimum: 5
+          maximum: 60
+
+    WebhookStatus:
+      type: string
+      enum: [active, paused, disabled, failed]
+      description: Current status of the webhook
+      example: active
+
+    EventType:
+      type: string
+      enum: [
+        webhook.test,
+        user.created,
+        user.updated,
+        user.deleted,
+        user.login,
+        user.logout,
+        project.created,
+        project.updated,
+        project.completed,
+        project.deleted,
+        task.created,
+        task.updated,
+        task.assigned,
+        task.completed,
+        task.deleted,
+        file.uploaded,
+        file.deleted,
+        file.shared,
+        system.maintenance,
+        system.alert
+      ]
+      description: Type of event that triggers the webhook
+      example: project.created
+
+    WebhookTestResult:
+      type: object
+      required:
+        - success
+        - message
+      properties:
+        success:
+          type: boolean
+          description: Whether the test delivery was successful
+          example: true
+        response_code:
+          type: integer
+          description: HTTP response code from the endpoint
+          example: 200
+        response_time:
+          type: number
+          format: float
+          description: Response time in milliseconds
+          example: 245
+        response_body:
+          type: string
+          description: Response body from the endpoint
+          example: '{"status": "received"}'
+        error_message:
+          type: string
+          description: Error message if delivery failed
+        message:
+          type: string
+          description: Human-readable result message
+          example: Test webhook delivered successfully
+
+    WebhookDelivery:
+      type: object
+      required:
+        - id
+        - webhook_id
+        - event_type
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 789e0123-e45b-67c8-d901-234567890123
+        webhook_id:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        event_type:
+          $ref: '#/components/schemas/EventType'
+        event_id:
+          type: string
+          description: Unique identifier of the triggering event
+          example: abc123def456
+        status:
+          $ref: '#/components/schemas/DeliveryStatus'
+        response_code:
+          type: integer
+          description: HTTP response code from the webhook endpoint
+          example: 200
+        response_time:
+          type: number
+          format: float
+          description: Response time in milliseconds
+          example: 245
+        error_message:
+          type: string
+          description: Error message if delivery failed
+        attempts:
+          type: integer
+          description: Number of delivery attempts
+          minimum: 1
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+          description: When the delivery was first attempted
+          example: "2024-01-20T14:45:00Z"
+        delivered_at:
+          type: string
+          format: date-time
+          description: When the delivery was successfully completed
+          example: "2024-01-20T14:45:00Z"
+        last_attempt_at:
+          type: string
+          format: date-time
+          description: When the last delivery attempt was made
+          example: "2024-01-19T16:30:00Z"
+        next_retry_at:
+          type: string
+          format: date-time
+          description: When the next retry will be attempted (for failed deliveries)
+          example: "2024-01-19T17:30:00Z"
+
+    WebhookDeliveryDetailed:
+      allOf:
+        - $ref: '#/components/schemas/WebhookDelivery'
+        - type: object
+          properties:
+            payload:
+              type: object
+              description: The webhook payload that was sent
+            request_headers:
+              type: object
+              description: Headers sent with the webhook request
+              additionalProperties:
+                type: string
+            response_headers:
+              type: object
+              description: Headers received in the response
+              additionalProperties:
+                type: string
+            response_body:
+              type: string
+              description: Response body from the webhook endpoint
+
+    DeliveryStatus:
+      type: string
+      enum: [pending, success, failed, retrying]
+      description: Status of a webhook delivery
+      example: success
+
+    WebhookEventInfo:
+      type: object
+      required:
+        - type
+        - description
+      properties:
+        type:
+          $ref: '#/components/schemas/EventType'
+        description:
+          type: string
+          description: Human-readable description of the event
+          example: Triggered when a new user registers
+        schema_url:
+          type: string
+          format: uri
+          description: URL to the JSON schema for this event
+          example: https://api.company.com/schemas/user.created.json
+        example_payload:
+          type: object
+          description: Example payload for this event type
+
+    PaginationInfo:
+      type: object
+      required:
+        - page
+        - limit
+        - total_pages
+        - has_next
+        - has_previous
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        limit:
+          type: integer
+          minimum: 1
+        total_pages:
+          type: integer
+          minimum: 0
+        has_next:
+          type: boolean
+        has_previous:
+          type: boolean
+
+    ProblemDetail:
+      type: object
+      description: RFC 7807 Problem Details for HTTP APIs
+      required:
+        - type
+        - title
+        - status
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+
+  responses:
+    BadRequest:
+      description: Bad Request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    Forbidden:
+      description: Forbidden
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    NotFound:
+      description: Not Found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    Conflict:
+      description: Conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    UnprocessableEntity:
+      description: Unprocessable Entity
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    TooManyRequests:
+      description: Too Many Requests
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    InternalServerError:
+      description: Internal Server Error
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+tags:
+  - name: Webhooks
+    description: Webhook endpoint management
+  - name: Deliveries
+    description: Webhook delivery tracking and management
+  - name: Events
+    description: Available webhook events and schemas
+
+externalDocs:
+  description: Webhooks Documentation
+  url: https://docs.company.com/webhooks

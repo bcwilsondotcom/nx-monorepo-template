@@ -1,0 +1,639 @@
+name: Scheduled Maintenance
+
+on:
+  schedule:
+    # Run every Sunday at 2 AM UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+    inputs:
+      tasks:
+        description: 'Maintenance tasks to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - dependencies
+          - security
+          - performance
+          - cleanup
+      force_updates:
+        description: 'Force dependency updates'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  security-events: write
+  actions: write
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      run-dependencies: ${{ steps.tasks.outputs.run-dependencies }}
+      run-security: ${{ steps.tasks.outputs.run-security }}
+      run-performance: ${{ steps.tasks.outputs.run-performance }}
+      run-cleanup: ${{ steps.tasks.outputs.run-cleanup }}
+      maintenance-branch: ${{ steps.branch.outputs.name }}
+    steps:
+      - name: Determine tasks to run
+        id: tasks
+        run: |
+          TASKS="${{ inputs.tasks || 'all' }}"
+
+          if [ "$TASKS" = "all" ]; then
+            echo "run-dependencies=true" >> $GITHUB_OUTPUT
+            echo "run-security=true" >> $GITHUB_OUTPUT
+            echo "run-performance=true" >> $GITHUB_OUTPUT
+            echo "run-cleanup=true" >> $GITHUB_OUTPUT
+          else
+            echo "run-dependencies=$( [ "$TASKS" = "dependencies" ] && echo true || echo false )" >> $GITHUB_OUTPUT
+            echo "run-security=$( [ "$TASKS" = "security" ] && echo true || echo false )" >> $GITHUB_OUTPUT
+            echo "run-performance=$( [ "$TASKS" = "performance" ] && echo true || echo false )" >> $GITHUB_OUTPUT
+            echo "run-cleanup=$( [ "$TASKS" = "cleanup" ] && echo true || echo false )" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate maintenance branch name
+        id: branch
+        run: |
+          DATE=$(date +%Y%m%d)
+          BRANCH_NAME="maintenance/weekly-$DATE"
+          echo "name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+  dependency-updates:
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.run-dependencies == 'true'
+    outputs:
+      has-updates: ${{ steps.check-updates.outputs.has-updates }}
+      update-summary: ${{ steps.update-summary.outputs.summary }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create maintenance branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b ${{ needs.setup.outputs.maintenance-branch }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check for outdated dependencies
+        id: outdated
+        run: |
+          echo "## Outdated Dependencies" > outdated-report.md
+          echo "" >> outdated-report.md
+
+          # Check for outdated packages
+          if pnpm outdated --format json > outdated.json 2>/dev/null; then
+            if [ -s outdated.json ]; then
+              echo "Found outdated dependencies" >> outdated-report.md
+              node -e "
+                const fs = require('fs');
+                const outdated = JSON.parse(fs.readFileSync('outdated.json', 'utf8'));
+                if (outdated && Object.keys(outdated).length > 0) {
+                  console.log('| Package | Current | Wanted | Latest |');
+                  console.log('|---------|---------|---------|---------|');
+                  Object.entries(outdated).forEach(([pkg, info]) => {
+                    console.log(\`| \${pkg} | \${info.current} | \${info.wanted} | \${info.latest} |\`);
+                  });
+                }
+              " >> outdated-report.md
+            else
+              echo "No outdated dependencies found" >> outdated-report.md
+            fi
+          else
+            echo "Unable to check outdated dependencies" >> outdated-report.md
+          fi
+
+      - name: Update dependencies
+        id: update
+        run: |
+          # Update minor and patch versions
+          if [ "${{ inputs.force_updates }}" = "true" ]; then
+            echo "Force updating all dependencies..."
+            pnpm update --latest
+          else
+            echo "Updating minor and patch versions..."
+            pnpm update
+          fi
+
+          # Update Nx workspace
+          pnpm nx migrate latest || true
+
+      - name: Check for changes
+        id: check-updates
+        run: |
+          if git diff --quiet; then
+            echo "has-updates=false" >> $GITHUB_OUTPUT
+            echo "No dependency updates available"
+          else
+            echo "has-updates=true" >> $GITHUB_OUTPUT
+            echo "Dependency updates found"
+
+            # Create update summary
+            echo "## Dependency Updates" > update-summary.md
+            echo "" >> update-summary.md
+            echo "### Changed Files:" >> update-summary.md
+            git diff --name-only | while read file; do
+              echo "- $file" >> update-summary.md
+            done
+            echo "" >> update-summary.md
+            echo "### Package.json Changes:" >> update-summary.md
+            git diff package.json | grep -E "^\+.*\".*\":" | sed 's/^+//' >> update-summary.md || echo "No package.json changes" >> update-summary.md
+          fi
+
+      - name: Create update summary
+        id: update-summary
+        run: |
+          if [ -f update-summary.md ]; then
+            echo "summary<<EOF" >> $GITHUB_OUTPUT
+            cat update-summary.md >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "summary=No updates available" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit updates
+        if: steps.check-updates.outputs.has-updates == 'true'
+        run: |
+          git add .
+          git commit -m "chore(maintenance): update dependencies
+
+          Weekly maintenance: updated dependencies to latest compatible versions.
+
+          🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+          Co-Authored-By: Claude <noreply@anthropic.com>"
+
+      - name: Upload update artifacts
+        if: steps.check-updates.outputs.has-updates == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-updates
+          path: |
+            update-summary.md
+            outdated-report.md
+
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.run-security == 'true'
+    outputs:
+      security-issues: ${{ steps.scan-results.outputs.issues }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run npm audit
+        id: npm-audit
+        run: |
+          echo "## Security Audit Report" > security-report.md
+          echo "" >> security-report.md
+
+          if pnpm audit --audit-level moderate --json > audit-results.json; then
+            echo "✅ No security vulnerabilities found" >> security-report.md
+            echo "issues=none" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ Security vulnerabilities found" >> security-report.md
+            echo "" >> security-report.md
+
+            # Parse and format audit results
+            node -e "
+              const fs = require('fs');
+              try {
+                const audit = JSON.parse(fs.readFileSync('audit-results.json', 'utf8'));
+                if (audit.vulnerabilities) {
+                  console.log('### Vulnerabilities:');
+                  Object.entries(audit.vulnerabilities).forEach(([pkg, vuln]) => {
+                    console.log(\`- **\${pkg}**: \${vuln.severity} - \${vuln.title}\`);
+                  });
+                }
+              } catch (e) {
+                console.log('Unable to parse audit results');
+              }
+            " >> security-report.md
+
+            echo "issues=found" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Snyk security scan
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --json-file-output=snyk-results.json
+
+      - name: Process Snyk results
+        if: always()
+        run: |
+          if [ -f snyk-results.json ]; then
+            echo "" >> security-report.md
+            echo "### Snyk Scan Results:" >> security-report.md
+
+            node -e "
+              const fs = require('fs');
+              try {
+                const results = JSON.parse(fs.readFileSync('snyk-results.json', 'utf8'));
+                if (results.vulnerabilities && results.vulnerabilities.length > 0) {
+                  console.log(\`Found \${results.vulnerabilities.length} vulnerabilities\`);
+                  results.vulnerabilities.slice(0, 10).forEach(vuln => {
+                    console.log(\`- **\${vuln.title}**: \${vuln.severity}\`);
+                  });
+                } else {
+                  console.log('No vulnerabilities found by Snyk');
+                }
+              } catch (e) {
+                console.log('Unable to parse Snyk results');
+              }
+            " >> security-report.md
+          fi
+
+      - name: Scan results summary
+        id: scan-results
+        run: |
+          echo "issues=$( [ -f audit-results.json ] && echo "found" || echo "none" )" >> $GITHUB_OUTPUT
+
+      - name: Upload security report
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report
+          path: security-report.md
+
+  performance-benchmarks:
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.run-performance == 'true'
+    outputs:
+      benchmark-results: ${{ steps.benchmark.outputs.results }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build projects
+        run: pnpm nx run-many -t build
+
+      - name: Run performance benchmarks
+        id: benchmark
+        run: |
+          echo "## Performance Benchmark Report" > performance-report.md
+          echo "" >> performance-report.md
+          echo "Date: $(date)" >> performance-report.md
+          echo "" >> performance-report.md
+
+          # Test suite performance
+          echo "### Test Suite Performance" >> performance-report.md
+          START_TIME=$(date +%s)
+          pnpm nx run-many -t test --skip-cache > test-output.log 2>&1
+          END_TIME=$(date +%s)
+          DURATION=$((END_TIME - START_TIME))
+          echo "- Test execution time: ${DURATION}s" >> performance-report.md
+
+          # Build performance
+          echo "" >> performance-report.md
+          echo "### Build Performance" >> performance-report.md
+          START_TIME=$(date +%s)
+          pnpm nx run-many -t build --skip-cache > build-output.log 2>&1
+          END_TIME=$(date +%s)
+          DURATION=$((END_TIME - START_TIME))
+          echo "- Build execution time: ${DURATION}s" >> performance-report.md
+
+          # Bundle size analysis
+          echo "" >> performance-report.md
+          echo "### Bundle Sizes" >> performance-report.md
+          find dist -name "*.js" -o -name "*.css" | head -10 | while read file; do
+            size=$(stat -c%s "$file" 2>/dev/null || echo "0")
+            size_kb=$((size / 1024))
+            echo "- $(basename $file): ${size_kb}KB" >> performance-report.md
+          done
+
+          # Cache efficiency
+          echo "" >> performance-report.md
+          echo "### Cache Statistics" >> performance-report.md
+          if [ -d ".nx/cache" ]; then
+            CACHE_SIZE=$(du -sh .nx/cache | cut -f1)
+            CACHE_FILES=$(find .nx/cache -type f | wc -l)
+            echo "- Cache size: $CACHE_SIZE" >> performance-report.md
+            echo "- Cache files: $CACHE_FILES" >> performance-report.md
+          fi
+
+          echo "results=completed" >> $GITHUB_OUTPUT
+
+      - name: Upload performance report
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-report
+          path: |
+            performance-report.md
+            test-output.log
+            build-output.log
+
+  cleanup-tasks:
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.run-cleanup == 'true'
+    outputs:
+      cleanup-summary: ${{ steps.cleanup.outputs.summary }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup cleanup environment
+        run: |
+          echo "## Cleanup Report" > cleanup-report.md
+          echo "" >> cleanup-report.md
+          echo "Date: $(date)" >> cleanup-report.md
+          echo "" >> cleanup-report.md
+
+      - name: Clean old workflow runs
+        id: cleanup-workflows
+        run: |
+          echo "### Workflow Cleanup" >> cleanup-report.md
+
+          # Get workflow runs older than 30 days
+          gh api repos/${{ github.repository }}/actions/runs \
+            --jq '.workflow_runs[] | select(.created_at < (now - 30*24*3600 | strftime("%Y-%m-%dT%H:%M:%SZ"))) | .id' \
+            > old_runs.txt || true
+
+          if [ -s old_runs.txt ]; then
+            OLD_RUNS_COUNT=$(wc -l < old_runs.txt)
+            echo "- Found $OLD_RUNS_COUNT old workflow runs to delete" >> cleanup-report.md
+
+            # Delete old workflow runs (limit to 10 per cleanup to avoid rate limits)
+            head -10 old_runs.txt | while read run_id; do
+              gh api repos/${{ github.repository }}/actions/runs/$run_id -X DELETE || true
+            done
+            echo "- Deleted up to 10 old workflow runs" >> cleanup-report.md
+          else
+            echo "- No old workflow runs found for cleanup" >> cleanup-report.md
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Clean old artifacts
+        run: |
+          echo "" >> cleanup-report.md
+          echo "### Artifact Cleanup" >> cleanup-report.md
+
+          # Get artifacts older than 7 days
+          gh api repos/${{ github.repository }}/actions/artifacts \
+            --jq '.artifacts[] | select(.created_at < (now - 7*24*3600 | strftime("%Y-%m-%dT%H:%M:%SZ"))) | .id' \
+            > old_artifacts.txt || true
+
+          if [ -s old_artifacts.txt ]; then
+            OLD_ARTIFACTS_COUNT=$(wc -l < old_artifacts.txt)
+            echo "- Found $OLD_ARTIFACTS_COUNT old artifacts to delete" >> cleanup-report.md
+
+            # Delete old artifacts
+            while read artifact_id; do
+              gh api repos/${{ github.repository }}/actions/artifacts/$artifact_id -X DELETE || true
+            done < old_artifacts.txt
+            echo "- Deleted old artifacts" >> cleanup-report.md
+          else
+            echo "- No old artifacts found for cleanup" >> cleanup-report.md
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Clean cache directories
+        run: |
+          echo "" >> cleanup-report.md
+          echo "### Cache Cleanup" >> cleanup-report.md
+
+          # Clean old Nx cache
+          if [ -d ".nx/cache" ]; then
+            CACHE_SIZE_BEFORE=$(du -sh .nx/cache | cut -f1)
+            find .nx/cache -type f -mtime +7 -delete || true
+            CACHE_SIZE_AFTER=$(du -sh .nx/cache | cut -f1)
+            echo "- Nx cache: $CACHE_SIZE_BEFORE → $CACHE_SIZE_AFTER" >> cleanup-report.md
+          fi
+
+          # Clean node_modules if very large
+          if [ -d "node_modules" ]; then
+            NODE_MODULES_SIZE=$(du -sh node_modules | cut -f1)
+            echo "- node_modules size: $NODE_MODULES_SIZE" >> cleanup-report.md
+          fi
+
+      - name: Cleanup summary
+        id: cleanup
+        run: |
+          echo "summary<<EOF" >> $GITHUB_OUTPUT
+          cat cleanup-report.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Upload cleanup report
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleanup-report
+          path: cleanup-report.md
+
+  full-test-suite:
+    runs-on: ubuntu-latest
+    needs: [setup, dependency-updates]
+    if: needs.setup.outputs.run-dependencies == 'true' || needs.setup.outputs.run-security == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.setup.outputs.maintenance-branch }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run full test suite
+        run: |
+          echo "Running comprehensive test suite..."
+          pnpm nx run-many -t lint
+          pnpm nx run-many -t test --coverage
+          pnpm nx run-many -t build
+
+  create-maintenance-pr:
+    runs-on: ubuntu-latest
+    needs: [setup, dependency-updates, full-test-suite]
+    if: needs.dependency-updates.outputs.has-updates == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push maintenance branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git push origin ${{ needs.setup.outputs.maintenance-branch }}
+
+      - name: Create Pull Request
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = 'chore(maintenance): weekly dependency updates';
+            const body = `## Weekly Maintenance
+
+            This PR contains automated maintenance updates:
+
+            ${{ needs.dependency-updates.outputs.update-summary }}
+
+            ### Validation
+            - ✅ All tests pass
+            - ✅ Build successful
+            - ✅ Linting passed
+
+            ### Next Steps
+            - Review the changes
+            - Merge if everything looks good
+            - Monitor for any issues after deployment
+
+            ---
+            🤖 Generated with [Claude Code](https://claude.com/claude-code)`;
+
+            await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              head: '${{ needs.setup.outputs.maintenance-branch }}',
+              base: 'main',
+              body: body
+            });
+
+  generate-report:
+    runs-on: ubuntu-latest
+    needs: [setup, dependency-updates, security-scan, performance-benchmarks, cleanup-tasks]
+    if: always()
+    steps:
+      - name: Download all reports
+        uses: actions/download-artifact@v4
+        with:
+          path: reports/
+
+      - name: Generate comprehensive report
+        run: |
+          echo "# Weekly Maintenance Report" > maintenance-report.md
+          echo "" >> maintenance-report.md
+          echo "Date: $(date)" >> maintenance-report.md
+          echo "" >> maintenance-report.md
+
+          # Dependency updates
+          if [ -f "reports/dependency-updates/update-summary.md" ]; then
+            cat reports/dependency-updates/update-summary.md >> maintenance-report.md
+          else
+            echo "## Dependency Updates" >> maintenance-report.md
+            echo "No dependency updates were needed." >> maintenance-report.md
+          fi
+          echo "" >> maintenance-report.md
+
+          # Security scan
+          if [ -f "reports/security-report/security-report.md" ]; then
+            cat reports/security-report/security-report.md >> maintenance-report.md
+          fi
+          echo "" >> maintenance-report.md
+
+          # Performance benchmarks
+          if [ -f "reports/performance-report/performance-report.md" ]; then
+            cat reports/performance-report/performance-report.md >> maintenance-report.md
+          fi
+          echo "" >> maintenance-report.md
+
+          # Cleanup tasks
+          if [ -f "reports/cleanup-report/cleanup-report.md" ]; then
+            cat reports/cleanup-report/cleanup-report.md >> maintenance-report.md
+          fi
+
+          echo "" >> maintenance-report.md
+          echo "---" >> maintenance-report.md
+          echo "🤖 Generated with [Claude Code](https://claude.com/claude-code)" >> maintenance-report.md
+
+      - name: Upload comprehensive report
+        uses: actions/upload-artifact@v4
+        with:
+          name: maintenance-report
+          path: maintenance-report.md
+
+      - name: Post report summary
+        run: |
+          echo "## Weekly Maintenance Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Tasks Completed:" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔄 Dependency Updates: ${{ needs.dependency-updates.outputs.has-updates == 'true' && 'Updates Found' || 'No Updates' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔒 Security Scan: ${{ needs.security-scan.outputs.security-issues == 'none' && 'Clean' || 'Issues Found' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 📊 Performance Benchmarks: ${{ needs.performance-benchmarks.outputs.benchmark-results == 'completed' && 'Completed' || 'Skipped' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🧹 Cleanup: ${{ needs.cleanup-tasks.result == 'success' && 'Completed' || 'Skipped' }}" >> $GITHUB_STEP_SUMMARY
+
+  notify-maintenance:
+    runs-on: ubuntu-latest
+    needs: [generate-report, create-maintenance-pr]
+    if: always()
+    steps:
+      - name: Notify Slack
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_MESSAGE: |
+            🔧 Weekly maintenance completed!
+
+            Tasks run: ${{ inputs.tasks || 'all' }}
+            Dependencies: ${{ needs.dependency-updates.outputs.has-updates == 'true' && 'Updates available' || 'Up to date' }}
+            Security: ${{ needs.security-scan.outputs.security-issues == 'none' && 'Clean' || 'Issues found' }}
+
+            ${{ needs.dependency-updates.outputs.has-updates == 'true' && 'PR created for dependency updates' || 'No action required' }}

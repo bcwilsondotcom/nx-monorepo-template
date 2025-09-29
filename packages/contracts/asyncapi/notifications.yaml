@@ -1,0 +1,1443 @@
+asyncapi: 2.6.0
+info:
+  title: Real-time Notifications API
+  version: 1.0.0
+  description: |
+    Real-time notification channels for the NX monorepo template.
+
+    This API defines the notification infrastructure for delivering real-time updates
+    to users across multiple channels including WebSocket, push notifications, email,
+    and SMS. It supports user preferences, notification routing, and delivery tracking.
+
+    ## Notification Types
+    - **In-app**: Real-time notifications displayed in the application UI
+    - **Push**: Browser and mobile push notifications
+    - **Email**: Email notifications for important updates
+    - **SMS**: Text message notifications for critical alerts
+    - **Webhook**: Custom webhook notifications for integrations
+
+    ## Delivery Guarantees
+    - At-least-once delivery for critical notifications
+    - Best-effort delivery for non-critical notifications
+    - Automatic retry with exponential backoff for failed deliveries
+    - Dead letter queues for permanently failed notifications
+
+    ## User Preferences
+    - Per-channel notification preferences
+    - Event-type specific preferences
+    - Do-not-disturb schedules
+    - Frequency controls and digest options
+  contact:
+    name: Notifications Team
+    email: notifications@company.com
+    url: https://docs.company.com/notifications
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+defaultContentType: application/json
+
+servers:
+  websocket-prod:
+    url: wss://notifications.company.com/v1
+    protocol: wss
+    description: Production WebSocket notifications
+    security:
+      - bearerAuth: []
+    bindings:
+      ws:
+        query:
+          type: object
+          properties:
+            user_id:
+              type: string
+              format: uuid
+            channels:
+              type: string
+              description: Comma-separated list of channels to subscribe to
+
+  push-service:
+    url: https://push.company.com/v1
+    protocol: https
+    description: Push notification service
+    security:
+      - serviceAuth: []
+
+  email-service:
+    url: smtp://email.company.com:587
+    protocol: smtp
+    description: Email notification service
+    security:
+      - smtpAuth: []
+
+  sms-service:
+    url: https://sms.company.com/v1
+    protocol: https
+    description: SMS notification service
+    security:
+      - serviceAuth: []
+
+channels:
+  user/{userId}/notifications:
+    description: User-specific notification channel
+    parameters:
+      userId:
+        $ref: '#/components/parameters/userId'
+    subscribe:
+      summary: Subscribe to user notifications
+      description: Receive real-time notifications for a specific user
+      operationId: subscribeUserNotifications
+      message:
+        oneOf:
+          - $ref: '#/components/messages/ProjectNotification'
+          - $ref: '#/components/messages/TaskNotification'
+          - $ref: '#/components/messages/TeamNotification'
+          - $ref: '#/components/messages/SystemNotification'
+          - $ref: '#/components/messages/CommentNotification'
+          - $ref: '#/components/messages/FileNotification'
+          - $ref: '#/components/messages/ReminderNotification'
+    bindings:
+      ws:
+        method: GET
+        query:
+          type: object
+          properties:
+            types:
+              type: string
+              description: Filter notification types
+            priority:
+              type: string
+              enum: [low, normal, high, urgent]
+              description: Minimum priority level
+      amqp:
+        is: routingKey
+        exchange:
+          name: user.notifications
+          type: topic
+          durable: true
+        queue:
+          name: notifications.user.{userId}
+          durable: true
+          exclusive: true
+          autoDelete: true
+          ttl: 86400000  # 24 hours
+
+  user/{userId}/push:
+    description: Push notification channel for a specific user
+    parameters:
+      userId:
+        $ref: '#/components/parameters/userId'
+    publish:
+      summary: Send push notification
+      description: Send push notification to user's registered devices
+      operationId: sendPushNotification
+      message:
+        $ref: '#/components/messages/PushNotification'
+    bindings:
+      http:
+        type: request
+        method: POST
+        headers:
+          type: object
+          properties:
+            Authorization:
+              type: string
+            Content-Type:
+              type: string
+              const: application/json
+
+  user/{userId}/email:
+    description: Email notification channel for a specific user
+    parameters:
+      userId:
+        $ref: '#/components/parameters/userId'
+    publish:
+      summary: Send email notification
+      description: Send email notification to user's registered email address
+      operationId: sendEmailNotification
+      message:
+        $ref: '#/components/messages/EmailNotification'
+    bindings:
+      smtp:
+        priority: 1
+        cc:
+          - notifications@company.com
+
+  user/{userId}/sms:
+    description: SMS notification channel for a specific user
+    parameters:
+      userId:
+        $ref: '#/components/parameters/userId'
+    publish:
+      summary: Send SMS notification
+      description: Send SMS notification to user's registered phone number
+      operationId: sendSMSNotification
+      message:
+        $ref: '#/components/messages/SMSNotification'
+    bindings:
+      http:
+        type: request
+        method: POST
+
+  notifications/broadcast:
+    description: System-wide broadcast notifications
+    subscribe:
+      summary: Subscribe to broadcast notifications
+      description: Receive system-wide notifications for all users
+      operationId: subscribeBroadcastNotifications
+      message:
+        oneOf:
+          - $ref: '#/components/messages/SystemBroadcast'
+          - $ref: '#/components/messages/MaintenanceNotification'
+          - $ref: '#/components/messages/SecurityAlert'
+    publish:
+      summary: Send broadcast notification
+      description: Send notification to all active users
+      operationId: sendBroadcastNotification
+      message:
+        oneOf:
+          - $ref: '#/components/messages/SystemBroadcast'
+          - $ref: '#/components/messages/MaintenanceNotification'
+          - $ref: '#/components/messages/SecurityAlert'
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: notifications.broadcast
+          type: fanout
+          durable: true
+
+  notifications/digest:
+    description: Digest notification channel for batched notifications
+    publish:
+      summary: Send digest notification
+      description: Send batched digest of notifications
+      operationId: sendDigestNotification
+      message:
+        $ref: '#/components/messages/DigestNotification'
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: notifications.digest
+          type: direct
+          durable: true
+        queue:
+          name: digest.notifications
+          durable: true
+
+  notifications/delivery-status:
+    description: Notification delivery status updates
+    subscribe:
+      summary: Subscribe to delivery status
+      description: Receive updates on notification delivery status
+      operationId: subscribeDeliveryStatus
+      message:
+        $ref: '#/components/messages/DeliveryStatus'
+    publish:
+      summary: Update delivery status
+      description: Report notification delivery status
+      operationId: updateDeliveryStatus
+      message:
+        $ref: '#/components/messages/DeliveryStatus'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    serviceAuth:
+      type: apiKey
+      in: header
+      name: X-Service-Key
+    smtpAuth:
+      type: userPassword
+
+  parameters:
+    userId:
+      description: Unique identifier for a user
+      schema:
+        type: string
+        format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+
+  messageTraits:
+    notificationHeaders:
+      headers:
+        type: object
+        properties:
+          notification_id:
+            type: string
+            format: uuid
+            description: Unique identifier for this notification
+          user_id:
+            type: string
+            format: uuid
+            description: Target user for the notification
+          channel:
+            type: string
+            enum: [in_app, push, email, sms, webhook]
+            description: Delivery channel for the notification
+          priority:
+            type: string
+            enum: [low, normal, high, urgent]
+            description: Notification priority level
+          timestamp:
+            type: string
+            format: date-time
+            description: When the notification was created
+          expires_at:
+            type: string
+            format: date-time
+            description: When the notification expires
+          correlation_id:
+            type: string
+            format: uuid
+            description: Correlation ID for related notifications
+          source:
+            type: string
+            description: Service that generated the notification
+        required:
+          - notification_id
+          - user_id
+          - channel
+          - priority
+          - timestamp
+          - source
+
+  messages:
+    ProjectNotification:
+      name: ProjectNotification
+      title: Project Notification
+      summary: Notification about project updates
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/notificationHeaders'
+      payload:
+        $ref: '#/components/schemas/ProjectNotificationPayload'
+      examples:
+        - name: Project status update
+          summary: Project status changed to active
+          payload:
+            type: project_status_changed
+            title: Project Status Updated
+            message: "Your project 'Website Redesign' is now active"
+            data:
+              project_id: 550e8400-e29b-41d4-a716-446655440000
+              project_name: Website Redesign
+              old_status: planning
+              new_status: active
+              changed_by: John Doe
+            action:
+              type: navigate
+              url: /projects/550e8400-e29b-41d4-a716-446655440000
+              label: View Project
+            read: false
+
+    TaskNotification:
+      name: TaskNotification
+      title: Task Notification
+      summary: Notification about task updates
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/notificationHeaders'
+      payload:
+        $ref: '#/components/schemas/TaskNotificationPayload'
+      examples:
+        - name: Task assignment
+          summary: New task assigned to user
+          payload:
+            type: task_assigned
+            title: New Task Assigned
+            message: "You have been assigned to 'Design login page'"
+            data:
+              task_id: 123e4567-e89b-12d3-a456-426614174000
+              task_title: Design login page
+              project_id: 550e8400-e29b-41d4-a716-446655440000
+              project_name: Website Redesign
+              assigned_by: Jane Smith
+              due_date: "2024-02-15"
+              priority: high
+            action:
+              type: navigate
+              url: /projects/550e8400-e29b-41d4-a716-446655440000/tasks/123e4567-e89b-12d3-a456-426614174000
+              label: View Task
+            read: false
+
+    TeamNotification:
+      name: TeamNotification
+      title: Team Notification
+      summary: Notification about team updates
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/notificationHeaders'
+      payload:
+        $ref: '#/components/schemas/TeamNotificationPayload'
+      examples:
+        - name: Team member added
+          summary: New team member joined project
+          payload:
+            type: team_member_added
+            title: New Team Member
+            message: "John Smith joined your project team"
+            data:
+              project_id: 550e8400-e29b-41d4-a716-446655440000
+              project_name: Website Redesign
+              member_id: 789e0123-e45b-67c8-d901-234567890123
+              member_name: John Smith
+              member_role: developer
+              added_by: Jane Doe
+            read: false
+
+    SystemNotification:
+      name: SystemNotification
+      title: System Notification
+      summary: System-wide notifications
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/notificationHeaders'
+      payload:
+        $ref: '#/components/schemas/SystemNotificationPayload'
+      examples:
+        - name: Feature announcement
+          summary: New feature announcement
+          payload:
+            type: feature_announcement
+            title: New Feature Available
+            message: "Introducing real-time collaboration tools"
+            data:
+              feature_name: Real-time Collaboration
+              release_date: "2024-02-01"
+              documentation_url: https://docs.company.com/collaboration
+            action:
+              type: external_link
+              url: https://docs.company.com/collaboration
+              label: Learn More
+            read: false
+
+    CommentNotification:
+      name: CommentNotification
+      title: Comment Notification
+      summary: Notification about new comments
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/notificationHeaders'
+      payload:
+        $ref: '#/components/schemas/CommentNotificationPayload'
+      examples:
+        - name: New comment
+          summary: New comment on project
+          payload:
+            type: comment_added
+            title: New Comment
+            message: "Sarah Wilson commented on your project"
+            data:
+              comment_id: 456e7890-e12b-34c5-d678-901234567890
+              project_id: 550e8400-e29b-41d4-a716-446655440000
+              project_name: Website Redesign
+              task_id: 123e4567-e89b-12d3-a456-426614174000
+              task_title: Design login page
+              author_name: Sarah Wilson
+              comment_preview: "I think we should consider using..."
+            action:
+              type: navigate
+              url: /projects/550e8400-e29b-41d4-a716-446655440000/tasks/123e4567-e89b-12d3-a456-426614174000#comment-456e7890-e12b-34c5-d678-901234567890
+              label: View Comment
+            read: false
+
+    FileNotification:
+      name: FileNotification
+      title: File Notification
+      summary: Notification about file updates
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/notificationHeaders'
+      payload:
+        $ref: '#/components/schemas/FileNotificationPayload'
+      examples:
+        - name: File shared
+          summary: File shared with user
+          payload:
+            type: file_shared
+            title: File Shared With You
+            message: "Tom Brown shared 'design_mockups.pdf' with you"
+            data:
+              file_id: 789e0123-e45b-67c8-d901-234567890123
+              filename: design_mockups.pdf
+              project_id: 550e8400-e29b-41d4-a716-446655440000
+              project_name: Website Redesign
+              shared_by: Tom Brown
+              permissions: [read, download]
+            action:
+              type: navigate
+              url: /projects/550e8400-e29b-41d4-a716-446655440000/files/789e0123-e45b-67c8-d901-234567890123
+              label: View File
+            read: false
+
+    ReminderNotification:
+      name: ReminderNotification
+      title: Reminder Notification
+      summary: Scheduled reminder notifications
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/notificationHeaders'
+      payload:
+        $ref: '#/components/schemas/ReminderNotificationPayload'
+      examples:
+        - name: Task due reminder
+          summary: Task due date reminder
+          payload:
+            type: task_due_reminder
+            title: Task Due Soon
+            message: "Your task 'Design login page' is due tomorrow"
+            data:
+              task_id: 123e4567-e89b-12d3-a456-426614174000
+              task_title: Design login page
+              project_id: 550e8400-e29b-41d4-a716-446655440000
+              project_name: Website Redesign
+              due_date: "2024-02-15"
+              days_remaining: 1
+              priority: high
+            action:
+              type: navigate
+              url: /projects/550e8400-e29b-41d4-a716-446655440000/tasks/123e4567-e89b-12d3-a456-426614174000
+              label: View Task
+            read: false
+
+    PushNotification:
+      name: PushNotification
+      title: Push Notification
+      summary: Browser/mobile push notification
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/PushNotificationPayload'
+      examples:
+        - name: Push notification
+          summary: Browser push notification
+          payload:
+            title: New Task Assigned
+            body: "You have been assigned to 'Design login page'"
+            icon: /icons/task-notification.png
+            badge: /icons/badge.png
+            tag: task_assigned_123e4567
+            data:
+              type: task_assigned
+              task_id: 123e4567-e89b-12d3-a456-426614174000
+              project_id: 550e8400-e29b-41d4-a716-446655440000
+              url: /projects/550e8400-e29b-41d4-a716-446655440000/tasks/123e4567-e89b-12d3-a456-426614174000
+            actions:
+              - action: view
+                title: View Task
+              - action: mark_read
+                title: Mark as Read
+            vibrate: [200, 100, 200]
+            silent: false
+
+    EmailNotification:
+      name: EmailNotification
+      title: Email Notification
+      summary: Email notification message
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/EmailNotificationPayload'
+      examples:
+        - name: Email notification
+          summary: Project status update email
+          payload:
+            to: john.doe@company.com
+            from: notifications@company.com
+            reply_to: noreply@company.com
+            subject: "Project Status Update: Website Redesign"
+            template_id: project_status_update
+            template_data:
+              user_name: John Doe
+              project_name: Website Redesign
+              old_status: planning
+              new_status: active
+              project_url: https://app.company.com/projects/550e8400-e29b-41d4-a716-446655440000
+              changed_by: Jane Smith
+            html_content: "<html>...</html>"
+            text_content: "Your project Website Redesign status changed..."
+            attachments: []
+            priority: normal
+            send_at: "2024-01-20T15:00:00Z"
+
+    SMSNotification:
+      name: SMSNotification
+      title: SMS Notification
+      summary: SMS text message notification
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/SMSNotificationPayload'
+      examples:
+        - name: SMS notification
+          summary: Urgent task reminder SMS
+          payload:
+            to: "+15551234567"
+            from: "Company"
+            message: "URGENT: Your task 'Fix security bug' is overdue. Please check the app."
+            priority: urgent
+            scheduled_at: "2024-01-20T15:00:00Z"
+
+    SystemBroadcast:
+      name: SystemBroadcast
+      title: System Broadcast
+      summary: System-wide broadcast message
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/notificationHeaders'
+      payload:
+        $ref: '#/components/schemas/SystemBroadcastPayload'
+      examples:
+        - name: Feature announcement broadcast
+          summary: New feature announcement to all users
+          payload:
+            type: feature_announcement
+            title: New Collaboration Features
+            message: "We've added real-time commenting and file sharing to improve team collaboration."
+            target_audience: all_users
+            channels: [in_app, email]
+            action:
+              type: external_link
+              url: https://blog.company.com/new-collaboration-features
+              label: Read More
+            expires_at: "2024-02-01T00:00:00Z"
+
+    MaintenanceNotification:
+      name: MaintenanceNotification
+      title: Maintenance Notification
+      summary: System maintenance notification
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/notificationHeaders'
+      payload:
+        $ref: '#/components/schemas/MaintenanceNotificationPayload'
+      examples:
+        - name: Scheduled maintenance
+          summary: Upcoming maintenance window
+          payload:
+            type: scheduled_maintenance
+            title: Scheduled Maintenance
+            message: "System maintenance scheduled for Sunday 2:00-4:00 AM EST"
+            maintenance_id: maint_20240128_0200
+            start_time: "2024-01-28T07:00:00Z"
+            end_time: "2024-01-28T09:00:00Z"
+            affected_services: [api, web_app, mobile_app]
+            impact_level: medium
+            channels: [in_app, email, push]
+
+    SecurityAlert:
+      name: SecurityAlert
+      title: Security Alert
+      summary: Security-related alert notification
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/notificationHeaders'
+      payload:
+        $ref: '#/components/schemas/SecurityAlertPayload'
+      examples:
+        - name: Suspicious login
+          summary: Suspicious login attempt detected
+          payload:
+            type: suspicious_login
+            title: Security Alert
+            message: "Suspicious login attempt detected from new location"
+            alert_level: high
+            details:
+              ip_address: "192.168.1.100"
+              location: "San Francisco, CA"
+              user_agent: "Mozilla/5.0..."
+              timestamp: "2024-01-20T14:30:00Z"
+            action:
+              type: navigate
+              url: /security/sessions
+              label: Review Sessions
+            channels: [in_app, email, sms]
+
+    DigestNotification:
+      name: DigestNotification
+      title: Digest Notification
+      summary: Batched digest of multiple notifications
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/notificationHeaders'
+      payload:
+        $ref: '#/components/schemas/DigestNotificationPayload'
+      examples:
+        - name: Daily digest
+          summary: Daily summary of notifications
+          payload:
+            digest_type: daily
+            period_start: "2024-01-20T00:00:00Z"
+            period_end: "2024-01-20T23:59:59Z"
+            total_notifications: 8
+            summary:
+              projects: 3
+              tasks: 4
+              comments: 1
+            notifications:
+              - type: project_updated
+                title: Project Status Updated
+                count: 2
+                latest_time: "2024-01-20T16:30:00Z"
+              - type: task_assigned
+                title: New Tasks Assigned
+                count: 4
+                latest_time: "2024-01-20T15:45:00Z"
+            action:
+              type: navigate
+              url: /notifications
+              label: View All Notifications
+
+    DeliveryStatus:
+      name: DeliveryStatus
+      title: Delivery Status Update
+      summary: Notification delivery status update
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/DeliveryStatusPayload'
+      examples:
+        - name: Delivery success
+          summary: Notification delivered successfully
+          payload:
+            notification_id: 550e8400-e29b-41d4-a716-446655440000
+            user_id: 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+            channel: email
+            status: delivered
+            delivered_at: "2024-01-20T15:05:30Z"
+            attempts: 1
+        - name: Delivery failure
+          summary: Notification delivery failed
+          payload:
+            notification_id: 550e8400-e29b-41d4-a716-446655440000
+            user_id: 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+            channel: sms
+            status: failed
+            error_code: INVALID_PHONE_NUMBER
+            error_message: "The phone number is not valid"
+            attempts: 3
+            next_retry_at: "2024-01-20T16:00:00Z"
+
+  schemas:
+    ProjectNotificationPayload:
+      type: object
+      required:
+        - type
+        - title
+        - message
+        - data
+        - read
+      properties:
+        type:
+          type: string
+          enum: [project_created, project_updated, project_completed, project_deleted, project_status_changed]
+        title:
+          type: string
+          maxLength: 100
+        message:
+          type: string
+          maxLength: 500
+        data:
+          type: object
+          properties:
+            project_id:
+              type: string
+              format: uuid
+            project_name:
+              type: string
+            old_status:
+              type: string
+            new_status:
+              type: string
+            changed_by:
+              type: string
+        action:
+          $ref: '#/components/schemas/NotificationAction'
+        read:
+          type: boolean
+          default: false
+
+    TaskNotificationPayload:
+      type: object
+      required:
+        - type
+        - title
+        - message
+        - data
+        - read
+      properties:
+        type:
+          type: string
+          enum: [task_created, task_updated, task_assigned, task_completed, task_deleted, task_due_reminder]
+        title:
+          type: string
+          maxLength: 100
+        message:
+          type: string
+          maxLength: 500
+        data:
+          type: object
+          properties:
+            task_id:
+              type: string
+              format: uuid
+            task_title:
+              type: string
+            project_id:
+              type: string
+              format: uuid
+            project_name:
+              type: string
+            assigned_by:
+              type: string
+            due_date:
+              type: string
+              format: date
+            priority:
+              type: string
+              enum: [low, medium, high, critical]
+        action:
+          $ref: '#/components/schemas/NotificationAction'
+        read:
+          type: boolean
+          default: false
+
+    TeamNotificationPayload:
+      type: object
+      required:
+        - type
+        - title
+        - message
+        - data
+        - read
+      properties:
+        type:
+          type: string
+          enum: [team_member_added, team_member_removed, team_role_changed, team_invite_sent]
+        title:
+          type: string
+          maxLength: 100
+        message:
+          type: string
+          maxLength: 500
+        data:
+          type: object
+          properties:
+            project_id:
+              type: string
+              format: uuid
+            project_name:
+              type: string
+            member_id:
+              type: string
+              format: uuid
+            member_name:
+              type: string
+            member_role:
+              type: string
+            added_by:
+              type: string
+            old_role:
+              type: string
+            new_role:
+              type: string
+        action:
+          $ref: '#/components/schemas/NotificationAction'
+        read:
+          type: boolean
+          default: false
+
+    SystemNotificationPayload:
+      type: object
+      required:
+        - type
+        - title
+        - message
+        - read
+      properties:
+        type:
+          type: string
+          enum: [feature_announcement, policy_update, service_update, promotion, reminder]
+        title:
+          type: string
+          maxLength: 100
+        message:
+          type: string
+          maxLength: 500
+        data:
+          type: object
+          additionalProperties: true
+        action:
+          $ref: '#/components/schemas/NotificationAction'
+        read:
+          type: boolean
+          default: false
+
+    CommentNotificationPayload:
+      type: object
+      required:
+        - type
+        - title
+        - message
+        - data
+        - read
+      properties:
+        type:
+          type: string
+          enum: [comment_added, comment_reply, comment_mention]
+        title:
+          type: string
+          maxLength: 100
+        message:
+          type: string
+          maxLength: 500
+        data:
+          type: object
+          properties:
+            comment_id:
+              type: string
+              format: uuid
+            project_id:
+              type: string
+              format: uuid
+            project_name:
+              type: string
+            task_id:
+              type: string
+              format: uuid
+            task_title:
+              type: string
+            author_name:
+              type: string
+            comment_preview:
+              type: string
+              maxLength: 200
+        action:
+          $ref: '#/components/schemas/NotificationAction'
+        read:
+          type: boolean
+          default: false
+
+    FileNotificationPayload:
+      type: object
+      required:
+        - type
+        - title
+        - message
+        - data
+        - read
+      properties:
+        type:
+          type: string
+          enum: [file_uploaded, file_shared, file_updated, file_deleted]
+        title:
+          type: string
+          maxLength: 100
+        message:
+          type: string
+          maxLength: 500
+        data:
+          type: object
+          properties:
+            file_id:
+              type: string
+              format: uuid
+            filename:
+              type: string
+            project_id:
+              type: string
+              format: uuid
+            project_name:
+              type: string
+            shared_by:
+              type: string
+            permissions:
+              type: array
+              items:
+                type: string
+                enum: [read, write, download, share]
+        action:
+          $ref: '#/components/schemas/NotificationAction'
+        read:
+          type: boolean
+          default: false
+
+    ReminderNotificationPayload:
+      type: object
+      required:
+        - type
+        - title
+        - message
+        - data
+        - read
+      properties:
+        type:
+          type: string
+          enum: [task_due_reminder, project_deadline_reminder, meeting_reminder, follow_up_reminder]
+        title:
+          type: string
+          maxLength: 100
+        message:
+          type: string
+          maxLength: 500
+        data:
+          type: object
+          properties:
+            task_id:
+              type: string
+              format: uuid
+            task_title:
+              type: string
+            project_id:
+              type: string
+              format: uuid
+            project_name:
+              type: string
+            due_date:
+              type: string
+              format: date
+            days_remaining:
+              type: integer
+            priority:
+              type: string
+              enum: [low, medium, high, critical]
+        action:
+          $ref: '#/components/schemas/NotificationAction'
+        read:
+          type: boolean
+          default: false
+
+    PushNotificationPayload:
+      type: object
+      required:
+        - title
+        - body
+      properties:
+        title:
+          type: string
+          maxLength: 100
+          description: Notification title
+        body:
+          type: string
+          maxLength: 500
+          description: Notification body text
+        icon:
+          type: string
+          format: uri
+          description: URL to notification icon
+        badge:
+          type: string
+          format: uri
+          description: URL to badge icon
+        image:
+          type: string
+          format: uri
+          description: URL to notification image
+        tag:
+          type: string
+          description: Notification tag for grouping
+        data:
+          type: object
+          description: Custom data payload
+          additionalProperties: true
+        actions:
+          type: array
+          items:
+            type: object
+            required:
+              - action
+              - title
+            properties:
+              action:
+                type: string
+                description: Action identifier
+              title:
+                type: string
+                description: Action button text
+              icon:
+                type: string
+                format: uri
+                description: Action icon URL
+        vibrate:
+          type: array
+          items:
+            type: integer
+          description: Vibration pattern in milliseconds
+        silent:
+          type: boolean
+          default: false
+          description: Whether notification should be silent
+        requireInteraction:
+          type: boolean
+          default: false
+          description: Whether notification requires user interaction
+        ttl:
+          type: integer
+          description: Time to live in seconds
+
+    EmailNotificationPayload:
+      type: object
+      required:
+        - to
+        - from
+        - subject
+      properties:
+        to:
+          type: string
+          format: email
+          description: Recipient email address
+        from:
+          type: string
+          format: email
+          description: Sender email address
+        reply_to:
+          type: string
+          format: email
+          description: Reply-to email address
+        cc:
+          type: array
+          items:
+            type: string
+            format: email
+          description: CC recipients
+        bcc:
+          type: array
+          items:
+            type: string
+            format: email
+          description: BCC recipients
+        subject:
+          type: string
+          maxLength: 200
+          description: Email subject line
+        template_id:
+          type: string
+          description: Email template identifier
+        template_data:
+          type: object
+          description: Template variable data
+          additionalProperties: true
+        html_content:
+          type: string
+          description: HTML email content
+        text_content:
+          type: string
+          description: Plain text email content
+        attachments:
+          type: array
+          items:
+            type: object
+            properties:
+              filename:
+                type: string
+              content_type:
+                type: string
+              content:
+                type: string
+                format: base64
+        priority:
+          type: string
+          enum: [low, normal, high]
+          default: normal
+        send_at:
+          type: string
+          format: date-time
+          description: Scheduled send time
+        tracking:
+          type: object
+          properties:
+            click_tracking:
+              type: boolean
+            open_tracking:
+              type: boolean
+            unsubscribe_tracking:
+              type: boolean
+
+    SMSNotificationPayload:
+      type: object
+      required:
+        - to
+        - message
+      properties:
+        to:
+          type: string
+          pattern: '^\+[1-9]\d{1,14}$'
+          description: Recipient phone number in E.164 format
+        from:
+          type: string
+          description: Sender identifier
+        message:
+          type: string
+          maxLength: 1600
+          description: SMS message content
+        priority:
+          type: string
+          enum: [low, normal, high, urgent]
+          default: normal
+        scheduled_at:
+          type: string
+          format: date-time
+          description: Scheduled send time
+        callback_url:
+          type: string
+          format: uri
+          description: Delivery status callback URL
+        ttl:
+          type: integer
+          description: Time to live in seconds
+
+    SystemBroadcastPayload:
+      type: object
+      required:
+        - type
+        - title
+        - message
+        - target_audience
+        - channels
+      properties:
+        type:
+          type: string
+          enum: [announcement, feature_announcement, policy_change, service_update]
+        title:
+          type: string
+          maxLength: 100
+        message:
+          type: string
+          maxLength: 1000
+        target_audience:
+          type: string
+          enum: [all_users, premium_users, admin_users, specific_users]
+        target_user_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Specific user IDs when target_audience is 'specific_users'
+        channels:
+          type: array
+          items:
+            type: string
+            enum: [in_app, push, email, sms]
+          minItems: 1
+        action:
+          $ref: '#/components/schemas/NotificationAction'
+        expires_at:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties: true
+
+    MaintenanceNotificationPayload:
+      type: object
+      required:
+        - type
+        - title
+        - message
+        - start_time
+        - end_time
+        - affected_services
+        - channels
+      properties:
+        type:
+          type: string
+          enum: [scheduled_maintenance, emergency_maintenance, maintenance_complete]
+        title:
+          type: string
+          maxLength: 100
+        message:
+          type: string
+          maxLength: 1000
+        maintenance_id:
+          type: string
+          description: Unique maintenance identifier
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type: string
+          format: date-time
+        affected_services:
+          type: array
+          items:
+            type: string
+          description: List of affected services
+        impact_level:
+          type: string
+          enum: [low, medium, high, critical]
+        channels:
+          type: array
+          items:
+            type: string
+            enum: [in_app, push, email, sms]
+        action:
+          $ref: '#/components/schemas/NotificationAction'
+
+    SecurityAlertPayload:
+      type: object
+      required:
+        - type
+        - title
+        - message
+        - alert_level
+        - channels
+      properties:
+        type:
+          type: string
+          enum: [suspicious_login, password_changed, account_locked, data_breach, security_update]
+        title:
+          type: string
+          maxLength: 100
+        message:
+          type: string
+          maxLength: 1000
+        alert_level:
+          type: string
+          enum: [low, medium, high, critical]
+        details:
+          type: object
+          description: Alert-specific details
+          additionalProperties: true
+        action:
+          $ref: '#/components/schemas/NotificationAction'
+        channels:
+          type: array
+          items:
+            type: string
+            enum: [in_app, push, email, sms]
+        auto_resolve:
+          type: boolean
+          default: false
+        resolve_timeout:
+          type: integer
+          description: Auto-resolve timeout in seconds
+
+    DigestNotificationPayload:
+      type: object
+      required:
+        - digest_type
+        - period_start
+        - period_end
+        - total_notifications
+        - summary
+        - notifications
+      properties:
+        digest_type:
+          type: string
+          enum: [hourly, daily, weekly]
+        period_start:
+          type: string
+          format: date-time
+        period_end:
+          type: string
+          format: date-time
+        total_notifications:
+          type: integer
+          minimum: 0
+        summary:
+          type: object
+          description: Summary statistics
+          additionalProperties:
+            type: integer
+        notifications:
+          type: array
+          items:
+            type: object
+            required:
+              - type
+              - title
+              - count
+              - latest_time
+            properties:
+              type:
+                type: string
+              title:
+                type: string
+              count:
+                type: integer
+                minimum: 1
+              latest_time:
+                type: string
+                format: date-time
+        action:
+          $ref: '#/components/schemas/NotificationAction'
+
+    DeliveryStatusPayload:
+      type: object
+      required:
+        - notification_id
+        - user_id
+        - channel
+        - status
+      properties:
+        notification_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        channel:
+          type: string
+          enum: [in_app, push, email, sms, webhook]
+        status:
+          type: string
+          enum: [pending, delivered, failed, bounced, unsubscribed]
+        delivered_at:
+          type: string
+          format: date-time
+        error_code:
+          type: string
+        error_message:
+          type: string
+        attempts:
+          type: integer
+          minimum: 1
+        next_retry_at:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties: true
+
+    NotificationAction:
+      type: object
+      required:
+        - type
+        - label
+      properties:
+        type:
+          type: string
+          enum: [navigate, external_link, api_call, dismiss]
+        url:
+          type: string
+          format: uri
+        label:
+          type: string
+          maxLength: 50
+        method:
+          type: string
+          enum: [GET, POST, PUT, DELETE]
+          description: HTTP method for api_call actions
+        payload:
+          type: object
+          description: Payload for api_call actions
+          additionalProperties: true
+
+tags:
+  - name: User Notifications
+    description: User-specific notification channels
+  - name: Push Notifications
+    description: Browser and mobile push notifications
+  - name: Email Notifications
+    description: Email notification delivery
+  - name: SMS Notifications
+    description: SMS text message notifications
+  - name: System Broadcasts
+    description: System-wide broadcast notifications
+  - name: Delivery Tracking
+    description: Notification delivery status and tracking
+
+externalDocs:
+  description: Notifications Documentation
+  url: https://docs.company.com/notifications

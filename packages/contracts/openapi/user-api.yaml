@@ -1,0 +1,1441 @@
+openapi: 3.1.0
+info:
+  title: User Management API
+  description: |
+    User authentication and profile management API for the NX monorepo template.
+
+    This API provides comprehensive user management functionality including:
+    - User registration and authentication
+    - Profile management and customization
+    - Password reset and security features
+    - Role-based access control
+    - User preferences and settings
+    - Account verification and two-factor authentication
+
+    ## Authentication Flow
+    1. Register or login to obtain JWT tokens
+    2. Use access tokens for API requests
+    3. Refresh tokens when access tokens expire
+    4. Logout to invalidate all tokens
+
+    ## Security Features
+    - JWT-based authentication with refresh tokens
+    - Password strength validation
+    - Account lockout after failed attempts
+    - Two-factor authentication support
+    - Session management and device tracking
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: api-support@company.com
+    url: https://docs.company.com/api
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.company.com/v1
+    description: Production server
+  - url: https://staging-api.company.com/v1
+    description: Staging server
+  - url: https://dev-api.company.com/v1
+    description: Development server
+  - url: http://localhost:3000/api/v1
+    description: Local development server
+
+security:
+  - BearerAuth: []
+
+paths:
+  /auth/register:
+    post:
+      summary: Register new user
+      description: Create a new user account with email verification
+      operationId: registerUser
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            examples:
+              basic_registration:
+                summary: Basic user registration
+                value:
+                  email: john.doe@company.com
+                  password: SecurePassword123!
+                  first_name: John
+                  last_name: Doe
+                  terms_accepted: true
+              full_registration:
+                summary: Registration with additional details
+                value:
+                  email: jane.smith@company.com
+                  password: AnotherSecure456!
+                  first_name: Jane
+                  last_name: Smith
+                  phone: "+1-555-123-4567"
+                  company: Tech Corp
+                  job_title: Software Engineer
+                  terms_accepted: true
+                  marketing_consent: false
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+              examples:
+                registration_success:
+                  summary: Successful registration
+                  value:
+                    message: Registration successful. Please check your email for verification instructions.
+                    user_id: 550e8400-e29b-41d4-a716-446655440000
+                    email: john.doe@company.com
+                    verification_required: true
+                    expires_at: "2024-01-16T10:30:00Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Email already exists
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              examples:
+                email_exists:
+                  summary: Email already registered
+                  value:
+                    type: https://api.company.com/problems/email-already-exists
+                    title: Email Already Exists
+                    status: 409
+                    detail: An account with this email address already exists
+                    instance: /auth/register
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/login:
+    post:
+      summary: User login
+      description: Authenticate user and return access and refresh tokens
+      operationId: loginUser
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              email_login:
+                summary: Login with email and password
+                value:
+                  email: john.doe@company.com
+                  password: SecurePassword123!
+                  remember_me: true
+              2fa_login:
+                summary: Login with two-factor authentication
+                value:
+                  email: john.doe@company.com
+                  password: SecurePassword123!
+                  totp_code: "123456"
+                  remember_me: false
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              examples:
+                login_success:
+                  summary: Successful login
+                  value:
+                    access_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                    refresh_token: dGhpcyBpcyBhIHJlZnJlc2ggdG9rZW4...
+                    token_type: Bearer
+                    expires_in: 3600
+                    user:
+                      id: 550e8400-e29b-41d4-a716-446655440000
+                      email: john.doe@company.com
+                      first_name: John
+                      last_name: Doe
+                      role: user
+                      is_verified: true
+                      last_login: "2024-01-15T10:30:00Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Invalid credentials or account locked
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              examples:
+                invalid_credentials:
+                  summary: Invalid email or password
+                  value:
+                    type: https://api.company.com/problems/invalid-credentials
+                    title: Invalid Credentials
+                    status: 401
+                    detail: The email or password provided is incorrect
+                    instance: /auth/login
+                account_locked:
+                  summary: Account temporarily locked
+                  value:
+                    type: https://api.company.com/problems/account-locked
+                    title: Account Locked
+                    status: 401
+                    detail: Account temporarily locked due to multiple failed login attempts
+                    instance: /auth/login
+                    unlock_at: "2024-01-15T11:30:00Z"
+                2fa_required:
+                  summary: Two-factor authentication required
+                  value:
+                    type: https://api.company.com/problems/2fa-required
+                    title: Two-Factor Authentication Required
+                    status: 401
+                    detail: Please provide your two-factor authentication code
+                    instance: /auth/login
+                    temp_token: temp_abc123
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/refresh:
+    post:
+      summary: Refresh access token
+      description: Get a new access token using a valid refresh token
+      operationId: refreshToken
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Invalid or expired refresh token
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/logout:
+    post:
+      summary: User logout
+      description: Invalidate the current session and refresh token
+      operationId: logoutUser
+      tags:
+        - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+                  description: Refresh token to invalidate (optional)
+                logout_all:
+                  type: boolean
+                  description: Whether to logout from all devices
+                  default: false
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Logout successful
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/forgot-password:
+    post:
+      summary: Request password reset
+      description: Send password reset instructions to user's email
+      operationId: forgotPassword
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: john.doe@company.com
+      responses:
+        '200':
+          description: Password reset instructions sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: If an account with this email exists, password reset instructions have been sent
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/reset-password:
+    post:
+      summary: Reset password
+      description: Reset password using the token from email
+      operationId: resetPassword
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '200':
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Password reset successful
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Invalid or expired reset token
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/verify-email:
+    post:
+      summary: Verify email address
+      description: Verify user's email using verification token
+      operationId: verifyEmail
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+              properties:
+                token:
+                  type: string
+                  description: Email verification token
+                  example: abc123def456
+      responses:
+        '200':
+          description: Email verified successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Email verified successfully
+                  user:
+                    $ref: '#/components/schemas/UserProfile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Invalid or expired verification token
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/me:
+    get:
+      summary: Get current user profile
+      description: Retrieve the authenticated user's profile information
+      operationId: getCurrentUser
+      tags:
+        - Users
+      responses:
+        '200':
+          description: User profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+              examples:
+                user_profile:
+                  summary: Complete user profile
+                  value:
+                    id: 550e8400-e29b-41d4-a716-446655440000
+                    email: john.doe@company.com
+                    first_name: John
+                    last_name: Doe
+                    phone: "+1-555-123-4567"
+                    avatar_url: https://api.company.com/avatars/550e8400-e29b-41d4-a716-446655440000
+                    company: Tech Corp
+                    job_title: Software Engineer
+                    bio: Passionate software engineer with 5+ years of experience
+                    location: San Francisco, CA
+                    timezone: America/Los_Angeles
+                    role: user
+                    is_verified: true
+                    is_active: true
+                    two_factor_enabled: true
+                    language: en
+                    theme: dark
+                    notifications:
+                      email: true
+                      push: false
+                      sms: false
+                    created_at: "2024-01-01T10:00:00Z"
+                    updated_at: "2024-01-15T14:30:00Z"
+                    last_login: "2024-01-15T10:30:00Z"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      summary: Update user profile
+      description: Update the authenticated user's profile information
+      operationId: updateCurrentUser
+      tags:
+        - Users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdateRequest'
+            examples:
+              basic_update:
+                summary: Update basic information
+                value:
+                  first_name: John
+                  last_name: Smith
+                  phone: "+1-555-987-6543"
+              full_update:
+                summary: Comprehensive profile update
+                value:
+                  first_name: John
+                  last_name: Smith
+                  phone: "+1-555-987-6543"
+                  company: New Tech Corp
+                  job_title: Senior Software Engineer
+                  bio: Senior software engineer with expertise in full-stack development
+                  location: Austin, TX
+                  timezone: America/Chicago
+                  language: en
+                  theme: light
+                  notifications:
+                    email: true
+                    push: true
+                    sms: false
+      responses:
+        '200':
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/me/password:
+    put:
+      summary: Change password
+      description: Change the authenticated user's password
+      operationId: changePassword
+      tags:
+        - Users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Password changed successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Current password is incorrect
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/me/avatar:
+    post:
+      summary: Upload user avatar
+      description: Upload a new avatar image for the authenticated user
+      operationId: uploadAvatar
+      tags:
+        - Users
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                avatar:
+                  type: string
+                  format: binary
+                  description: Avatar image file (max 5MB, JPG/PNG only)
+              required:
+                - avatar
+      responses:
+        '200':
+          description: Avatar uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  avatar_url:
+                    type: string
+                    format: uri
+                    example: https://api.company.com/avatars/550e8400-e29b-41d4-a716-446655440000
+                  message:
+                    type: string
+                    example: Avatar uploaded successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: File too large
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '415':
+          description: Unsupported media type
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      summary: Delete user avatar
+      description: Remove the authenticated user's avatar
+      operationId: deleteAvatar
+      tags:
+        - Users
+      responses:
+        '200':
+          description: Avatar deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Avatar deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: No avatar found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/me/2fa:
+    get:
+      summary: Get 2FA status
+      description: Get the current two-factor authentication status and QR code for setup
+      operationId: get2FAStatus
+      tags:
+        - Users
+        - Security
+      responses:
+        '200':
+          description: 2FA status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TwoFactorStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      summary: Enable 2FA
+      description: Enable two-factor authentication for the user account
+      operationId: enable2FA
+      tags:
+        - Users
+        - Security
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - totp_code
+              properties:
+                totp_code:
+                  type: string
+                  pattern: '^[0-9]{6}$'
+                  description: 6-digit TOTP code from authenticator app
+                  example: "123456"
+      responses:
+        '200':
+          description: 2FA enabled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Two-factor authentication enabled successfully
+                  backup_codes:
+                    type: array
+                    items:
+                      type: string
+                    description: One-time backup codes for account recovery
+                    example: ["abc12345", "def67890", "ghi13579"]
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          description: Invalid TOTP code
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      summary: Disable 2FA
+      description: Disable two-factor authentication for the user account
+      operationId: disable2FA
+      tags:
+        - Users
+        - Security
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - current_password
+              properties:
+                current_password:
+                  type: string
+                  description: Current account password for verification
+                totp_code:
+                  type: string
+                  pattern: '^[0-9]{6}$'
+                  description: 6-digit TOTP code (if 2FA is currently enabled)
+      responses:
+        '200':
+          description: 2FA disabled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Two-factor authentication disabled successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/me/sessions:
+    get:
+      summary: List active sessions
+      description: Get all active sessions for the authenticated user
+      operationId: getActiveSessions
+      tags:
+        - Users
+        - Security
+      responses:
+        '200':
+          description: Active sessions retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserSession'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      summary: Revoke all sessions
+      description: Revoke all active sessions except the current one
+      operationId: revokeAllSessions
+      tags:
+        - Users
+        - Security
+      responses:
+        '200':
+          description: All sessions revoked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: All other sessions have been revoked
+                  revoked_count:
+                    type: integer
+                    example: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/me/sessions/{sessionId}:
+    delete:
+      summary: Revoke specific session
+      description: Revoke a specific session by ID
+      operationId: revokeSession
+      tags:
+        - Users
+        - Security
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: 789e0123-e45b-67c8-d901-234567890123
+      responses:
+        '200':
+          description: Session revoked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Session revoked successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Session not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/me/deactivate:
+    post:
+      summary: Deactivate account
+      description: Deactivate the user account (soft delete)
+      operationId: deactivateAccount
+      tags:
+        - Users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - current_password
+                - reason
+              properties:
+                current_password:
+                  type: string
+                  description: Current account password for verification
+                reason:
+                  type: string
+                  description: Reason for deactivation
+                  enum: [privacy_concerns, too_many_emails, not_useful, found_alternative, temporary_break, other]
+                feedback:
+                  type: string
+                  description: Optional feedback about the deactivation
+                  maxLength: 1000
+      responses:
+        '200':
+          description: Account deactivated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Account deactivated successfully
+                  reactivation_token:
+                    type: string
+                    description: Token for account reactivation (valid for 30 days)
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - first_name
+        - last_name
+        - terms_accepted
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          example: john.doe@company.com
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+          pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]'
+          description: Password must contain at least 8 characters, including uppercase, lowercase, number, and special character
+          example: SecurePassword123!
+        first_name:
+          type: string
+          minLength: 1
+          maxLength: 50
+          example: John
+        last_name:
+          type: string
+          minLength: 1
+          maxLength: 50
+          example: Doe
+        phone:
+          type: string
+          pattern: '^\+[1-9]\d{1,14}$'
+          description: Phone number in E.164 format
+          example: "+1-555-123-4567"
+        company:
+          type: string
+          maxLength: 100
+          example: Tech Corp
+        job_title:
+          type: string
+          maxLength: 100
+          example: Software Engineer
+        terms_accepted:
+          type: boolean
+          description: User must accept terms of service
+          example: true
+        marketing_consent:
+          type: boolean
+          description: Consent to receive marketing communications
+          default: false
+
+    RegisterResponse:
+      type: object
+      required:
+        - message
+        - user_id
+        - email
+        - verification_required
+      properties:
+        message:
+          type: string
+          example: Registration successful. Please check your email for verification instructions.
+        user_id:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        email:
+          type: string
+          format: email
+          example: john.doe@company.com
+        verification_required:
+          type: boolean
+          example: true
+        expires_at:
+          type: string
+          format: date-time
+          description: When the verification link expires
+          example: "2024-01-16T10:30:00Z"
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: john.doe@company.com
+        password:
+          type: string
+          example: SecurePassword123!
+        totp_code:
+          type: string
+          pattern: '^[0-9]{6}$'
+          description: Two-factor authentication code (if enabled)
+          example: "123456"
+        remember_me:
+          type: boolean
+          description: Extend session duration
+          default: false
+
+    LoginResponse:
+      type: object
+      required:
+        - access_token
+        - refresh_token
+        - token_type
+        - expires_in
+        - user
+      properties:
+        access_token:
+          type: string
+          description: JWT access token
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        refresh_token:
+          type: string
+          description: Refresh token for obtaining new access tokens
+          example: dGhpcyBpcyBhIHJlZnJlc2ggdG9rZW4...
+        token_type:
+          type: string
+          example: Bearer
+        expires_in:
+          type: integer
+          description: Access token expiration time in seconds
+          example: 3600
+        user:
+          $ref: '#/components/schemas/UserProfile'
+
+    RefreshRequest:
+      type: object
+      required:
+        - refresh_token
+      properties:
+        refresh_token:
+          type: string
+          description: Valid refresh token
+          example: dGhpcyBpcyBhIHJlZnJlc2ggdG9rZW4...
+
+    RefreshResponse:
+      type: object
+      required:
+        - access_token
+        - token_type
+        - expires_in
+      properties:
+        access_token:
+          type: string
+          description: New JWT access token
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        token_type:
+          type: string
+          example: Bearer
+        expires_in:
+          type: integer
+          description: Access token expiration time in seconds
+          example: 3600
+        refresh_token:
+          type: string
+          description: New refresh token (if rotation is enabled)
+          example: bmV3IHJlZnJlc2ggdG9rZW4...
+
+    ResetPasswordRequest:
+      type: object
+      required:
+        - token
+        - new_password
+      properties:
+        token:
+          type: string
+          description: Password reset token from email
+          example: abc123def456ghi789
+        new_password:
+          type: string
+          minLength: 8
+          maxLength: 128
+          pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]'
+          description: New password meeting security requirements
+          example: NewSecurePassword456!
+
+    UserProfile:
+      type: object
+      required:
+        - id
+        - email
+        - first_name
+        - last_name
+        - role
+        - is_verified
+        - is_active
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          example: 550e8400-e29b-41d4-a716-446655440000
+        email:
+          type: string
+          format: email
+          example: john.doe@company.com
+        first_name:
+          type: string
+          example: John
+        last_name:
+          type: string
+          example: Doe
+        phone:
+          type: string
+          example: "+1-555-123-4567"
+        avatar_url:
+          type: string
+          format: uri
+          readOnly: true
+          example: https://api.company.com/avatars/550e8400-e29b-41d4-a716-446655440000
+        company:
+          type: string
+          example: Tech Corp
+        job_title:
+          type: string
+          example: Software Engineer
+        bio:
+          type: string
+          maxLength: 500
+          example: Passionate software engineer with 5+ years of experience
+        location:
+          type: string
+          example: San Francisco, CA
+        timezone:
+          type: string
+          description: IANA timezone identifier
+          example: America/Los_Angeles
+        role:
+          $ref: '#/components/schemas/UserRole'
+        is_verified:
+          type: boolean
+          readOnly: true
+          example: true
+        is_active:
+          type: boolean
+          readOnly: true
+          example: true
+        two_factor_enabled:
+          type: boolean
+          readOnly: true
+          example: false
+        language:
+          type: string
+          description: Preferred language (ISO 639-1 code)
+          example: en
+        theme:
+          type: string
+          enum: [light, dark, auto]
+          description: UI theme preference
+          example: dark
+        notifications:
+          $ref: '#/components/schemas/NotificationPreferences'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          example: "2024-01-01T10:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          example: "2024-01-15T14:30:00Z"
+        last_login:
+          type: string
+          format: date-time
+          readOnly: true
+          example: "2024-01-15T10:30:00Z"
+
+    UserUpdateRequest:
+      type: object
+      properties:
+        first_name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        last_name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        phone:
+          type: string
+          pattern: '^\+[1-9]\d{1,14}$'
+        company:
+          type: string
+          maxLength: 100
+        job_title:
+          type: string
+          maxLength: 100
+        bio:
+          type: string
+          maxLength: 500
+        location:
+          type: string
+          maxLength: 100
+        timezone:
+          type: string
+          description: IANA timezone identifier
+        language:
+          type: string
+          description: Preferred language (ISO 639-1 code)
+        theme:
+          type: string
+          enum: [light, dark, auto]
+        notifications:
+          $ref: '#/components/schemas/NotificationPreferences'
+
+    ChangePasswordRequest:
+      type: object
+      required:
+        - current_password
+        - new_password
+      properties:
+        current_password:
+          type: string
+          description: Current account password
+        new_password:
+          type: string
+          minLength: 8
+          maxLength: 128
+          pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]'
+          description: New password meeting security requirements
+
+    UserRole:
+      type: string
+      enum: [user, premium, admin, super_admin]
+      description: User role determining access permissions
+      example: user
+
+    NotificationPreferences:
+      type: object
+      properties:
+        email:
+          type: boolean
+          description: Receive email notifications
+          default: true
+        push:
+          type: boolean
+          description: Receive push notifications
+          default: true
+        sms:
+          type: boolean
+          description: Receive SMS notifications
+          default: false
+        marketing:
+          type: boolean
+          description: Receive marketing communications
+          default: false
+        project_updates:
+          type: boolean
+          description: Receive project update notifications
+          default: true
+        task_assignments:
+          type: boolean
+          description: Receive task assignment notifications
+          default: true
+        comments:
+          type: boolean
+          description: Receive comment notifications
+          default: true
+
+    TwoFactorStatus:
+      type: object
+      required:
+        - enabled
+      properties:
+        enabled:
+          type: boolean
+          description: Whether 2FA is currently enabled
+          example: false
+        qr_code:
+          type: string
+          description: QR code for authenticator app setup (only when setting up)
+          example: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...
+        secret:
+          type: string
+          description: Base32 secret for manual entry (only when setting up)
+          example: JBSWY3DPEHPK3PXP
+        backup_codes_remaining:
+          type: integer
+          description: Number of unused backup codes (only when enabled)
+          example: 8
+
+    UserSession:
+      type: object
+      required:
+        - id
+        - device_info
+        - ip_address
+        - created_at
+        - last_active
+        - is_current
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 789e0123-e45b-67c8-d901-234567890123
+        device_info:
+          type: object
+          properties:
+            browser:
+              type: string
+              example: Chrome
+            os:
+              type: string
+              example: macOS
+            device_type:
+              type: string
+              enum: [desktop, mobile, tablet]
+              example: desktop
+        ip_address:
+          type: string
+          example: 192.168.1.100
+        location:
+          type: object
+          properties:
+            country:
+              type: string
+              example: United States
+            region:
+              type: string
+              example: California
+            city:
+              type: string
+              example: San Francisco
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        last_active:
+          type: string
+          format: date-time
+          example: "2024-01-15T14:45:00Z"
+        is_current:
+          type: boolean
+          description: Whether this is the current session
+          example: true
+
+    ProblemDetail:
+      type: object
+      description: RFC 7807 Problem Details for HTTP APIs
+      required:
+        - type
+        - title
+        - status
+      properties:
+        type:
+          type: string
+          format: uri
+          description: A URI reference that identifies the problem type
+        title:
+          type: string
+          description: A short, human-readable summary of the problem type
+        status:
+          type: integer
+          description: The HTTP status code
+        detail:
+          type: string
+          description: A human-readable explanation specific to this occurrence
+        instance:
+          type: string
+          format: uri
+          description: A URI reference that identifies the specific occurrence
+
+  responses:
+    BadRequest:
+      description: Bad Request - Invalid request parameters or body
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    Unauthorized:
+      description: Unauthorized - Missing or invalid authentication
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    Forbidden:
+      description: Forbidden - Insufficient permissions
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    NotFound:
+      description: Not Found - Resource does not exist
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    Conflict:
+      description: Conflict - Resource already exists or conflict with current state
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    UnprocessableEntity:
+      description: Unprocessable Entity - Request is well-formed but contains semantic errors
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    TooManyRequests:
+      description: Too Many Requests - Rate limit exceeded
+      headers:
+        Retry-After:
+          description: Number of seconds to wait before retrying
+          schema:
+            type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    InternalServerError:
+      description: Internal Server Error - Unexpected server error
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+tags:
+  - name: Authentication
+    description: User authentication and authorization
+  - name: Users
+    description: User profile and account management
+  - name: Security
+    description: Security features including 2FA and session management
+
+externalDocs:
+  description: User Management Documentation
+  url: https://docs.company.com/api/user-management

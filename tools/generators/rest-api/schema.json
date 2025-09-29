@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "id": "RestApiGenerator",
+  "title": "REST API Generator",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "The name of the REST API application",
+      "$default": {
+        "$source": "argv",
+        "index": 0
+      },
+      "pattern": "^[a-zA-Z][a-zA-Z0-9-]*$"
+    },
+    "directory": {
+      "type": "string",
+      "description": "The directory to place the application in",
+      "default": "apps"
+    },
+    "tags": {
+      "type": "string",
+      "description": "Comma-separated tags for the project"
+    },
+    "framework": {
+      "type": "string",
+      "description": "The framework to use",
+      "enum": ["nestjs", "express", "fastify"],
+      "default": "nestjs"
+    },
+    "database": {
+      "type": "string",
+      "description": "The database to use",
+      "enum": ["postgres", "mongodb", "dynamodb", "none"],
+      "default": "postgres"
+    },
+    "includeOpenApi": {
+      "type": "boolean",
+      "description": "Include OpenAPI/Swagger support",
+      "default": true
+    },
+    "includeDocker": {
+      "type": "boolean",
+      "description": "Include Dockerfile",
+      "default": true
+    },
+    "includeTests": {
+      "type": "boolean",
+      "description": "Include test setup",
+      "default": true
+    }
+  },
+  "required": ["name"]
+}

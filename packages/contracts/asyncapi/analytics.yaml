@@ -1,0 +1,1695 @@
+asyncapi: 2.6.0
+info:
+  title: Analytics and Metrics Streaming API
+  version: 1.0.0
+  description: |
+    Analytics and metrics streaming API for the NX monorepo template.
+
+    This API defines the real-time analytics infrastructure for collecting, processing,
+    and streaming user behavior, system metrics, and business intelligence data.
+
+    ## Analytics Categories
+    - **User Analytics**: User behavior, engagement, and journey tracking
+    - **System Metrics**: Performance, health, and resource utilization
+    - **Business Intelligence**: Revenue, conversion, and growth metrics
+    - **Security Analytics**: Security events, threats, and audit trails
+    - **Product Analytics**: Feature usage, adoption, and feedback
+
+    ## Data Processing
+    - Real-time event streaming with Apache Kafka
+    - Batch processing for historical analysis
+    - Machine learning pipeline integration
+    - Data warehousing and reporting
+    - Privacy-compliant data handling
+
+    ## Privacy & Compliance
+    - GDPR and CCPA compliant data collection
+    - Data anonymization and pseudonymization
+    - Consent management integration
+    - Data retention policies
+    - Right to deletion support
+  contact:
+    name: Analytics Team
+    email: analytics@company.com
+    url: https://docs.company.com/analytics
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+defaultContentType: application/json
+
+servers:
+  kafka-analytics:
+    url: kafka-analytics.company.com:9093
+    protocol: kafka-secure
+    description: Analytics Kafka cluster
+    security:
+      - saslScram: []
+    bindings:
+      kafka:
+        schemaRegistryUrl: https://schema-registry.company.com
+        schemaRegistryVendor: confluent
+
+  kinesis-analytics:
+    url: kinesis.us-east-1.amazonaws.com
+    protocol: kinesis
+    description: AWS Kinesis Data Streams
+    security:
+      - awsSignature: []
+
+  websocket-analytics:
+    url: wss://analytics.company.com/v1/stream
+    protocol: wss
+    description: Real-time analytics WebSocket
+    security:
+      - bearerAuth: []
+
+channels:
+  analytics/user-events:
+    description: User behavior and interaction events
+    publish:
+      summary: Send user analytics events
+      description: Stream user behavior events for analytics processing
+      operationId: publishUserEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/PageView'
+          - $ref: '#/components/messages/UserAction'
+          - $ref: '#/components/messages/SessionStart'
+          - $ref: '#/components/messages/SessionEnd'
+          - $ref: '#/components/messages/FeatureUsage'
+          - $ref: '#/components/messages/ConversionEvent'
+    subscribe:
+      summary: Receive user analytics events
+      description: Listen to user behavior events for real-time processing
+      operationId: subscribeUserEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/PageView'
+          - $ref: '#/components/messages/UserAction'
+          - $ref: '#/components/messages/SessionStart'
+          - $ref: '#/components/messages/SessionEnd'
+          - $ref: '#/components/messages/FeatureUsage'
+          - $ref: '#/components/messages/ConversionEvent'
+    bindings:
+      kafka:
+        topic: analytics.user-events
+        partitions: 50
+        replicas: 3
+        configs:
+          retention.ms: 2592000000  # 30 days
+          cleanup.policy: delete
+      kinesis:
+        shards: 10
+        retentionPeriod: 168  # 7 days
+
+  analytics/system-metrics:
+    description: System performance and health metrics
+    publish:
+      summary: Send system metrics
+      description: Stream system performance metrics
+      operationId: publishSystemMetrics
+      message:
+        oneOf:
+          - $ref: '#/components/messages/PerformanceMetric'
+          - $ref: '#/components/messages/ErrorEvent'
+          - $ref: '#/components/messages/ResourceUsage'
+          - $ref: '#/components/messages/ApiMetrics'
+    subscribe:
+      summary: Receive system metrics
+      description: Listen to system metrics for monitoring
+      operationId: subscribeSystemMetrics
+      message:
+        oneOf:
+          - $ref: '#/components/messages/PerformanceMetric'
+          - $ref: '#/components/messages/ErrorEvent'
+          - $ref: '#/components/messages/ResourceUsage'
+          - $ref: '#/components/messages/ApiMetrics'
+    bindings:
+      kafka:
+        topic: analytics.system-metrics
+        partitions: 20
+        replicas: 3
+        configs:
+          retention.ms: 604800000  # 7 days
+          cleanup.policy: delete
+
+  analytics/business-events:
+    description: Business intelligence and revenue events
+    publish:
+      summary: Send business events
+      description: Stream business metrics and revenue events
+      operationId: publishBusinessEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/RevenueEvent'
+          - $ref: '#/components/messages/SubscriptionEvent'
+          - $ref: '#/components/messages/ProjectMetrics'
+          - $ref: '#/components/messages/UserEngagement'
+    subscribe:
+      summary: Receive business events
+      description: Listen to business events for BI processing
+      operationId: subscribeBusinessEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/RevenueEvent'
+          - $ref: '#/components/messages/SubscriptionEvent'
+          - $ref: '#/components/messages/ProjectMetrics'
+          - $ref: '#/components/messages/UserEngagement'
+    bindings:
+      kafka:
+        topic: analytics.business-events
+        partitions: 10
+        replicas: 3
+        configs:
+          retention.ms: 31536000000  # 1 year
+          cleanup.policy: compact
+
+  analytics/security-events:
+    description: Security events and audit trail
+    publish:
+      summary: Send security events
+      description: Stream security events for threat detection
+      operationId: publishSecurityEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/SecurityEvent'
+          - $ref: '#/components/messages/AuthenticationEvent'
+          - $ref: '#/components/messages/AccessEvent'
+          - $ref: '#/components/messages/AuditEvent'
+    subscribe:
+      summary: Receive security events
+      description: Listen to security events for threat analysis
+      operationId: subscribeSecurityEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/SecurityEvent'
+          - $ref: '#/components/messages/AuthenticationEvent'
+          - $ref: '#/components/messages/AccessEvent'
+          - $ref: '#/components/messages/AuditEvent'
+    bindings:
+      kafka:
+        topic: analytics.security-events
+        partitions: 15
+        replicas: 3
+        configs:
+          retention.ms: 94608000000  # 3 years
+          cleanup.policy: delete
+
+  analytics/product-events:
+    description: Product usage and feature adoption events
+    publish:
+      summary: Send product events
+      description: Stream product usage events
+      operationId: publishProductEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/FeatureAdoption'
+          - $ref: '#/components/messages/UserFeedback'
+          - $ref: '#/components/messages/ExperimentEvent'
+          - $ref: '#/components/messages/OnboardingEvent'
+    subscribe:
+      summary: Receive product events
+      description: Listen to product events for analysis
+      operationId: subscribeProductEvents
+      message:
+        oneOf:
+          - $ref: '#/components/messages/FeatureAdoption'
+          - $ref: '#/components/messages/UserFeedback'
+          - $ref: '#/components/messages/ExperimentEvent'
+          - $ref: '#/components/messages/OnboardingEvent'
+    bindings:
+      kafka:
+        topic: analytics.product-events
+        partitions: 10
+        replicas: 3
+        configs:
+          retention.ms: 15552000000  # 6 months
+          cleanup.policy: delete
+
+  analytics/real-time-aggregates:
+    description: Real-time aggregated metrics and KPIs
+    subscribe:
+      summary: Receive real-time aggregates
+      description: Listen to real-time computed metrics
+      operationId: subscribeRealTimeAggregates
+      message:
+        oneOf:
+          - $ref: '#/components/messages/RealTimeMetrics'
+          - $ref: '#/components/messages/KPIUpdate'
+          - $ref: '#/components/messages/AlertThreshold'
+    bindings:
+      kafka:
+        topic: analytics.real-time-aggregates
+        partitions: 5
+        replicas: 3
+        configs:
+          retention.ms: 86400000  # 1 day
+          cleanup.policy: delete
+
+components:
+  securitySchemes:
+    saslScram:
+      type: scramSha256
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    awsSignature:
+      type: httpApiKey
+      name: Authorization
+      in: header
+
+  messageTraits:
+    analyticsHeaders:
+      headers:
+        type: object
+        properties:
+          event_id:
+            type: string
+            format: uuid
+            description: Unique event identifier
+          timestamp:
+            type: string
+            format: date-time
+            description: Event timestamp in ISO 8601 format
+          version:
+            type: string
+            description: Event schema version
+            example: "1.0"
+          source:
+            type: string
+            description: Source system or service
+          user_id:
+            type: string
+            format: uuid
+            description: User identifier (optional, may be anonymous)
+          session_id:
+            type: string
+            description: Session identifier
+          correlation_id:
+            type: string
+            format: uuid
+            description: Correlation ID for related events
+          environment:
+            type: string
+            enum: [development, staging, production]
+            description: Environment where event occurred
+        required:
+          - event_id
+          - timestamp
+          - version
+          - source
+
+  messages:
+    PageView:
+      name: PageView
+      title: Page View Event
+      summary: User page view or screen view
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/analyticsHeaders'
+      payload:
+        $ref: '#/components/schemas/PageViewPayload'
+      examples:
+        - name: Web page view
+          summary: User viewed a project page
+          payload:
+            event_type: page_view
+            page_url: /projects/550e8400-e29b-41d4-a716-446655440000
+            page_title: Website Redesign Project
+            page_category: project_detail
+            referrer: /dashboard
+            user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+            screen_resolution: "1920x1080"
+            device_type: desktop
+            load_time: 1250
+            anonymous_id: anon_abc123def456
+
+    UserAction:
+      name: UserAction
+      title: User Action Event
+      summary: User interaction or action
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/analyticsHeaders'
+      payload:
+        $ref: '#/components/schemas/UserActionPayload'
+      examples:
+        - name: Button click
+          summary: User clicked create project button
+          payload:
+            event_type: user_action
+            action_type: click
+            element_type: button
+            element_id: create-project-btn
+            element_text: Create Project
+            page_url: /dashboard
+            coordinates:
+              x: 150
+              y: 200
+            context:
+              section: main_navigation
+              experiment_id: nav_redesign_v2
+
+    SessionStart:
+      name: SessionStart
+      title: Session Start Event
+      summary: User session started
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/analyticsHeaders'
+      payload:
+        $ref: '#/components/schemas/SessionStartPayload'
+      examples:
+        - name: New session
+          summary: User started a new session
+          payload:
+            event_type: session_start
+            entry_page: /login
+            utm_source: google
+            utm_medium: cpc
+            utm_campaign: q1_acquisition
+            device_info:
+              browser: Chrome
+              browser_version: "120.0.0.0"
+              os: Windows
+              os_version: "10"
+              device_type: desktop
+            location:
+              country: US
+              region: CA
+              city: San Francisco
+              timezone: America/Los_Angeles
+
+    SessionEnd:
+      name: SessionEnd
+      title: Session End Event
+      summary: User session ended
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/analyticsHeaders'
+      payload:
+        $ref: '#/components/schemas/SessionEndPayload'
+      examples:
+        - name: Session ended
+          summary: User session ended after 30 minutes
+          payload:
+            event_type: session_end
+            session_duration: 1800
+            pages_viewed: 8
+            actions_taken: 12
+            exit_page: /projects/550e8400-e29b-41d4-a716-446655440000
+            end_reason: timeout
+
+    FeatureUsage:
+      name: FeatureUsage
+      title: Feature Usage Event
+      summary: User used a specific feature
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/analyticsHeaders'
+      payload:
+        $ref: '#/components/schemas/FeatureUsagePayload'
+      examples:
+        - name: File upload
+          summary: User uploaded a file to project
+          payload:
+            event_type: feature_usage
+            feature_name: file_upload
+            feature_category: project_management
+            usage_context:
+              project_id: 550e8400-e29b-41d4-a716-446655440000
+              file_type: pdf
+              file_size: 2048576
+            success: true
+            duration: 3500
+
+    ConversionEvent:
+      name: ConversionEvent
+      title: Conversion Event
+      summary: User completed a conversion goal
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/analyticsHeaders'
+      payload:
+        $ref: '#/components/schemas/ConversionEventPayload'
+      examples:
+        - name: Subscription conversion
+          summary: User upgraded to premium plan
+          payload:
+            event_type: conversion
+            conversion_type: subscription_upgrade
+            conversion_value: 29.99
+            currency: USD
+            funnel_step: 3
+            attribution:
+              first_touch_source: google_ads
+              last_touch_source: email_campaign
+              campaign_id: spring_promo_2024
+
+    PerformanceMetric:
+      name: PerformanceMetric
+      title: Performance Metric
+      summary: System performance measurement
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/analyticsHeaders'
+      payload:
+        $ref: '#/components/schemas/PerformanceMetricPayload'
+      examples:
+        - name: API response time
+          summary: API endpoint performance measurement
+          payload:
+            event_type: performance_metric
+            metric_name: api_response_time
+            metric_value: 245.5
+            metric_unit: milliseconds
+            service_name: project-api
+            endpoint: /api/v1/projects
+            method: GET
+            status_code: 200
+            tags:
+              environment: production
+              region: us-east-1
+
+    ErrorEvent:
+      name: ErrorEvent
+      title: Error Event
+      summary: System error or exception
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/analyticsHeaders'
+      payload:
+        $ref: '#/components/schemas/ErrorEventPayload'
+      examples:
+        - name: API error
+          summary: Database connection error
+          payload:
+            event_type: error
+            error_type: database_error
+            error_message: "Connection timeout to database"
+            error_code: DB_TIMEOUT_001
+            severity: high
+            service_name: user-service
+            stack_trace: "Error: Connection timeout..."
+            context:
+              request_id: req_abc123
+              user_id: 550e8400-e29b-41d4-a716-446655440000
+              endpoint: /api/v1/users/me
+
+    ResourceUsage:
+      name: ResourceUsage
+      title: Resource Usage Event
+      summary: System resource utilization metrics
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/analyticsHeaders'
+      payload:
+        $ref: '#/components/schemas/ResourceUsagePayload'
+      examples:
+        - name: CPU usage
+          summary: Server CPU utilization measurement
+          payload:
+            event_type: resource_usage
+            resource_type: cpu
+            usage_percentage: 68.5
+            available_total: 8
+            service_name: project-service
+            instance_id: i-0123456789abcdef0
+            tags:
+              environment: production
+              region: us-east-1
+              availability_zone: us-east-1a
+
+    ApiMetrics:
+      name: ApiMetrics
+      title: API Metrics Event
+      summary: API usage and performance metrics
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/analyticsHeaders'
+      payload:
+        $ref: '#/components/schemas/ApiMetricsPayload'
+      examples:
+        - name: API call metrics
+          summary: API endpoint usage metrics
+          payload:
+            event_type: api_metrics
+            endpoint: /api/v1/projects
+            method: POST
+            status_code: 201
+            response_time: 156
+            request_size: 1024
+            response_size: 512
+            user_agent: "Project-Client/1.0"
+            client_ip: "192.168.1.100"
+            rate_limit_remaining: 995
+
+    RevenueEvent:
+      name: RevenueEvent
+      title: Revenue Event
+      summary: Revenue and billing related event
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/analyticsHeaders'
+      payload:
+        $ref: '#/components/schemas/RevenueEventPayload'
+      examples:
+        - name: Subscription payment
+          summary: Monthly subscription payment processed
+          payload:
+            event_type: revenue
+            transaction_type: subscription_payment
+            amount: 29.99
+            currency: USD
+            payment_method: credit_card
+            subscription_plan: premium
+            billing_cycle: monthly
+            customer_segment: individual
+            mrr_impact: 29.99
+            churn_risk_score: 0.15
+
+    SubscriptionEvent:
+      name: SubscriptionEvent
+      title: Subscription Event
+      summary: Subscription lifecycle event
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/analyticsHeaders'
+      payload:
+        $ref: '#/components/schemas/SubscriptionEventPayload'
+      examples:
+        - name: Subscription upgrade
+          summary: User upgraded subscription plan
+          payload:
+            event_type: subscription_event
+            action_type: upgrade
+            old_plan: basic
+            new_plan: premium
+            price_change: 20.00
+            effective_date: "2024-02-01T00:00:00Z"
+            upgrade_reason: feature_limit_reached
+            proration_amount: 6.67
+
+    ProjectMetrics:
+      name: ProjectMetrics
+      title: Project Metrics Event
+      summary: Project-related business metrics
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/analyticsHeaders'
+      payload:
+        $ref: '#/components/schemas/ProjectMetricsPayload'
+      examples:
+        - name: Project completion
+          summary: Project was completed successfully
+          payload:
+            event_type: project_metrics
+            action_type: project_completed
+            project_id: 550e8400-e29b-41d4-a716-446655440000
+            project_duration_days: 45
+            team_size: 5
+            tasks_completed: 24
+            budget_used: 15750.00
+            on_time: true
+            on_budget: true
+            client_satisfaction: 4.8
+
+    UserEngagement:
+      name: UserEngagement
+      title: User Engagement Event
+      summary: User engagement and retention metrics
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/analyticsHeaders'
+      payload:
+        $ref: '#/components/schemas/UserEngagementPayload'
+      examples:
+        - name: Daily active user
+          summary: User was active today
+          payload:
+            event_type: user_engagement
+            engagement_type: daily_active
+            login_count: 3
+            session_duration: 2400
+            features_used: [projects, tasks, files, team]
+            days_since_signup: 15
+            streak_days: 7
+            engagement_score: 85
+
+    SecurityEvent:
+      name: SecurityEvent
+      title: Security Event
+      summary: Security-related event or threat
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/analyticsHeaders'
+      payload:
+        $ref: '#/components/schemas/SecurityEventPayload'
+      examples:
+        - name: Suspicious login
+          summary: Suspicious login attempt detected
+          payload:
+            event_type: security_event
+            event_category: authentication
+            threat_level: medium
+            description: "Login attempt from unusual location"
+            source_ip: "192.168.1.100"
+            geolocation:
+              country: US
+              region: CA
+              city: San Francisco
+            risk_score: 65
+            blocked: false
+            user_notified: true
+
+    AuthenticationEvent:
+      name: AuthenticationEvent
+      title: Authentication Event
+      summary: User authentication event
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/analyticsHeaders'
+      payload:
+        $ref: '#/components/schemas/AuthenticationEventPayload'
+      examples:
+        - name: Login success
+          summary: User successfully logged in
+          payload:
+            event_type: authentication
+            action_type: login
+            success: true
+            method: password
+            two_factor_used: true
+            source_ip: "192.168.1.100"
+            user_agent: "Mozilla/5.0..."
+            device_fingerprint: "fp_abc123def456"
+            session_duration: 3600
+
+    AccessEvent:
+      name: AccessEvent
+      title: Access Event
+      summary: Resource access event
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/analyticsHeaders'
+      payload:
+        $ref: '#/components/schemas/AccessEventPayload'
+      examples:
+        - name: File access
+          summary: User accessed a project file
+          payload:
+            event_type: access
+            resource_type: file
+            resource_id: 789e0123-e45b-67c8-d901-234567890123
+            access_type: download
+            permissions_granted: [read, download]
+            project_id: 550e8400-e29b-41d4-a716-446655440000
+            authorized: true
+
+    AuditEvent:
+      name: AuditEvent
+      title: Audit Event
+      summary: System audit trail event
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/analyticsHeaders'
+      payload:
+        $ref: '#/components/schemas/AuditEventPayload'
+      examples:
+        - name: Admin action
+          summary: Admin user modified user permissions
+          payload:
+            event_type: audit
+            action_type: permission_change
+            target_resource: user
+            target_id: 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+            changes:
+              old_role: user
+              new_role: admin
+            justification: "Promotion to team lead"
+            approval_required: true
+            approved_by: 123e4567-e89b-12d3-a456-426614174000
+
+    FeatureAdoption:
+      name: FeatureAdoption
+      title: Feature Adoption Event
+      summary: Feature adoption and usage tracking
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/analyticsHeaders'
+      payload:
+        $ref: '#/components/schemas/FeatureAdoptionPayload'
+      examples:
+        - name: First feature use
+          summary: User used real-time collaboration for the first time
+          payload:
+            event_type: feature_adoption
+            feature_name: real_time_collaboration
+            adoption_type: first_use
+            feature_version: "2.1.0"
+            days_since_signup: 7
+            onboarding_step: completed
+            discovery_method: tooltip
+            usage_depth: basic
+
+    UserFeedback:
+      name: UserFeedback
+      title: User Feedback Event
+      summary: User feedback and satisfaction data
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/analyticsHeaders'
+      payload:
+        $ref: '#/components/schemas/UserFeedbackPayload'
+      examples:
+        - name: Feature rating
+          summary: User rated a feature
+          payload:
+            event_type: user_feedback
+            feedback_type: feature_rating
+            feature_name: project_templates
+            rating: 4
+            scale: 5
+            comment: "Very helpful for getting started quickly"
+            feedback_channel: in_app_survey
+            prompted: true
+
+    ExperimentEvent:
+      name: ExperimentEvent
+      title: Experiment Event
+      summary: A/B test and experiment tracking
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/analyticsHeaders'
+      payload:
+        $ref: '#/components/schemas/ExperimentEventPayload'
+      examples:
+        - name: Experiment exposure
+          summary: User was exposed to A/B test variant
+          payload:
+            event_type: experiment
+            action_type: exposure
+            experiment_id: dashboard_redesign_v2
+            variant: treatment
+            hypothesis: "New dashboard layout improves task completion"
+            allocation_key: user_id
+            traffic_allocation: 50
+
+    OnboardingEvent:
+      name: OnboardingEvent
+      title: Onboarding Event
+      summary: User onboarding progress tracking
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/analyticsHeaders'
+      payload:
+        $ref: '#/components/schemas/OnboardingEventPayload'
+      examples:
+        - name: Onboarding step
+          summary: User completed onboarding step
+          payload:
+            event_type: onboarding
+            action_type: step_completed
+            step_name: create_first_project
+            step_number: 3
+            total_steps: 5
+            time_spent: 45
+            completion_rate: 60
+            drop_off_point: null
+
+    RealTimeMetrics:
+      name: RealTimeMetrics
+      title: Real-time Metrics
+      summary: Real-time aggregated metrics
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/analyticsHeaders'
+      payload:
+        $ref: '#/components/schemas/RealTimeMetricsPayload'
+      examples:
+        - name: Active users
+          summary: Current active users count
+          payload:
+            event_type: real_time_metrics
+            metric_name: active_users
+            metric_value: 1247
+            time_window: 5m
+            aggregation_type: count
+            dimensions:
+              platform: web
+              region: us-east-1
+
+    KPIUpdate:
+      name: KPIUpdate
+      title: KPI Update
+      summary: Key Performance Indicator update
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/analyticsHeaders'
+      payload:
+        $ref: '#/components/schemas/KPIUpdatePayload'
+      examples:
+        - name: Monthly recurring revenue
+          summary: MRR KPI update
+          payload:
+            event_type: kpi_update
+            kpi_name: monthly_recurring_revenue
+            current_value: 125000.00
+            previous_value: 120000.00
+            change_percentage: 4.17
+            target_value: 150000.00
+            period: monthly
+            status: on_track
+
+    AlertThreshold:
+      name: AlertThreshold
+      title: Alert Threshold Event
+      summary: Metric threshold alert
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/analyticsHeaders'
+      payload:
+        $ref: '#/components/schemas/AlertThresholdPayload'
+      examples:
+        - name: High error rate
+          summary: Error rate exceeded threshold
+          payload:
+            event_type: alert_threshold
+            metric_name: error_rate
+            current_value: 5.2
+            threshold_value: 5.0
+            alert_level: warning
+            duration: 300
+            service_name: project-api
+            auto_resolve: false
+
+  schemas:
+    PageViewPayload:
+      type: object
+      required:
+        - event_type
+        - page_url
+        - page_title
+      properties:
+        event_type:
+          type: string
+          const: page_view
+        page_url:
+          type: string
+          format: uri-reference
+        page_title:
+          type: string
+        page_category:
+          type: string
+        referrer:
+          type: string
+          format: uri-reference
+        user_agent:
+          type: string
+        screen_resolution:
+          type: string
+          pattern: '^\d+x\d+$'
+        device_type:
+          type: string
+          enum: [desktop, mobile, tablet]
+        load_time:
+          type: integer
+          description: Page load time in milliseconds
+        anonymous_id:
+          type: string
+          description: Anonymous user identifier for non-authenticated users
+
+    UserActionPayload:
+      type: object
+      required:
+        - event_type
+        - action_type
+        - element_type
+      properties:
+        event_type:
+          type: string
+          const: user_action
+        action_type:
+          type: string
+          enum: [click, hover, scroll, keypress, submit, drag, drop]
+        element_type:
+          type: string
+          enum: [button, link, input, form, image, video, menu]
+        element_id:
+          type: string
+        element_text:
+          type: string
+        element_class:
+          type: string
+        page_url:
+          type: string
+          format: uri-reference
+        coordinates:
+          type: object
+          properties:
+            x:
+              type: integer
+            y:
+              type: integer
+        context:
+          type: object
+          additionalProperties: true
+
+    SessionStartPayload:
+      type: object
+      required:
+        - event_type
+        - entry_page
+      properties:
+        event_type:
+          type: string
+          const: session_start
+        entry_page:
+          type: string
+          format: uri-reference
+        utm_source:
+          type: string
+        utm_medium:
+          type: string
+        utm_campaign:
+          type: string
+        utm_content:
+          type: string
+        utm_term:
+          type: string
+        device_info:
+          type: object
+          properties:
+            browser:
+              type: string
+            browser_version:
+              type: string
+            os:
+              type: string
+            os_version:
+              type: string
+            device_type:
+              type: string
+              enum: [desktop, mobile, tablet]
+        location:
+          type: object
+          properties:
+            country:
+              type: string
+            region:
+              type: string
+            city:
+              type: string
+            timezone:
+              type: string
+
+    SessionEndPayload:
+      type: object
+      required:
+        - event_type
+        - session_duration
+      properties:
+        event_type:
+          type: string
+          const: session_end
+        session_duration:
+          type: integer
+          description: Session duration in seconds
+        pages_viewed:
+          type: integer
+        actions_taken:
+          type: integer
+        exit_page:
+          type: string
+          format: uri-reference
+        end_reason:
+          type: string
+          enum: [logout, timeout, close_browser, navigation_away]
+
+    FeatureUsagePayload:
+      type: object
+      required:
+        - event_type
+        - feature_name
+        - feature_category
+      properties:
+        event_type:
+          type: string
+          const: feature_usage
+        feature_name:
+          type: string
+        feature_category:
+          type: string
+        usage_context:
+          type: object
+          additionalProperties: true
+        success:
+          type: boolean
+        duration:
+          type: integer
+          description: Feature usage duration in milliseconds
+        error_message:
+          type: string
+
+    ConversionEventPayload:
+      type: object
+      required:
+        - event_type
+        - conversion_type
+      properties:
+        event_type:
+          type: string
+          const: conversion
+        conversion_type:
+          type: string
+          enum: [signup, subscription, purchase, trial_start, upgrade, downgrade]
+        conversion_value:
+          type: number
+          format: decimal
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        funnel_step:
+          type: integer
+        attribution:
+          type: object
+          properties:
+            first_touch_source:
+              type: string
+            last_touch_source:
+              type: string
+            campaign_id:
+              type: string
+            touchpoints:
+              type: array
+              items:
+                type: object
+
+    PerformanceMetricPayload:
+      type: object
+      required:
+        - event_type
+        - metric_name
+        - metric_value
+        - metric_unit
+      properties:
+        event_type:
+          type: string
+          const: performance_metric
+        metric_name:
+          type: string
+        metric_value:
+          type: number
+        metric_unit:
+          type: string
+          enum: [milliseconds, seconds, bytes, count, percentage]
+        service_name:
+          type: string
+        endpoint:
+          type: string
+        method:
+          type: string
+          enum: [GET, POST, PUT, DELETE, PATCH]
+        status_code:
+          type: integer
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+
+    ErrorEventPayload:
+      type: object
+      required:
+        - event_type
+        - error_type
+        - error_message
+        - severity
+      properties:
+        event_type:
+          type: string
+          const: error
+        error_type:
+          type: string
+          enum: [client_error, server_error, network_error, database_error, validation_error]
+        error_message:
+          type: string
+        error_code:
+          type: string
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        service_name:
+          type: string
+        stack_trace:
+          type: string
+        context:
+          type: object
+          additionalProperties: true
+
+    ResourceUsagePayload:
+      type: object
+      required:
+        - event_type
+        - resource_type
+        - usage_percentage
+      properties:
+        event_type:
+          type: string
+          const: resource_usage
+        resource_type:
+          type: string
+          enum: [cpu, memory, disk, network]
+        usage_percentage:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+        available_total:
+          type: number
+        service_name:
+          type: string
+        instance_id:
+          type: string
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+
+    ApiMetricsPayload:
+      type: object
+      required:
+        - event_type
+        - endpoint
+        - method
+        - status_code
+        - response_time
+      properties:
+        event_type:
+          type: string
+          const: api_metrics
+        endpoint:
+          type: string
+        method:
+          type: string
+          enum: [GET, POST, PUT, DELETE, PATCH]
+        status_code:
+          type: integer
+        response_time:
+          type: number
+          description: Response time in milliseconds
+        request_size:
+          type: integer
+          description: Request size in bytes
+        response_size:
+          type: integer
+          description: Response size in bytes
+        user_agent:
+          type: string
+        client_ip:
+          type: string
+        rate_limit_remaining:
+          type: integer
+
+    RevenueEventPayload:
+      type: object
+      required:
+        - event_type
+        - transaction_type
+        - amount
+        - currency
+      properties:
+        event_type:
+          type: string
+          const: revenue
+        transaction_type:
+          type: string
+          enum: [subscription_payment, one_time_purchase, refund, chargeback, upgrade_payment]
+        amount:
+          type: number
+          format: decimal
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        payment_method:
+          type: string
+          enum: [credit_card, debit_card, paypal, bank_transfer, crypto]
+        subscription_plan:
+          type: string
+        billing_cycle:
+          type: string
+          enum: [monthly, yearly, one_time]
+        customer_segment:
+          type: string
+          enum: [individual, team, enterprise]
+        mrr_impact:
+          type: number
+          format: decimal
+          description: Monthly recurring revenue impact
+        churn_risk_score:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+
+    SubscriptionEventPayload:
+      type: object
+      required:
+        - event_type
+        - action_type
+      properties:
+        event_type:
+          type: string
+          const: subscription_event
+        action_type:
+          type: string
+          enum: [created, upgraded, downgraded, cancelled, renewed, paused, resumed]
+        old_plan:
+          type: string
+        new_plan:
+          type: string
+        price_change:
+          type: number
+          format: decimal
+        effective_date:
+          type: string
+          format: date-time
+        upgrade_reason:
+          type: string
+        proration_amount:
+          type: number
+          format: decimal
+
+    ProjectMetricsPayload:
+      type: object
+      required:
+        - event_type
+        - action_type
+        - project_id
+      properties:
+        event_type:
+          type: string
+          const: project_metrics
+        action_type:
+          type: string
+          enum: [project_created, project_completed, project_cancelled, milestone_reached]
+        project_id:
+          type: string
+          format: uuid
+        project_duration_days:
+          type: integer
+        team_size:
+          type: integer
+        tasks_completed:
+          type: integer
+        budget_used:
+          type: number
+          format: decimal
+        on_time:
+          type: boolean
+        on_budget:
+          type: boolean
+        client_satisfaction:
+          type: number
+          format: float
+          minimum: 1
+          maximum: 5
+
+    UserEngagementPayload:
+      type: object
+      required:
+        - event_type
+        - engagement_type
+      properties:
+        event_type:
+          type: string
+          const: user_engagement
+        engagement_type:
+          type: string
+          enum: [daily_active, weekly_active, monthly_active, feature_adoption, retention]
+        login_count:
+          type: integer
+        session_duration:
+          type: integer
+          description: Total session duration in seconds
+        features_used:
+          type: array
+          items:
+            type: string
+        days_since_signup:
+          type: integer
+        streak_days:
+          type: integer
+        engagement_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+
+    SecurityEventPayload:
+      type: object
+      required:
+        - event_type
+        - event_category
+        - threat_level
+        - description
+      properties:
+        event_type:
+          type: string
+          const: security_event
+        event_category:
+          type: string
+          enum: [authentication, authorization, data_access, network, malware, phishing]
+        threat_level:
+          type: string
+          enum: [low, medium, high, critical]
+        description:
+          type: string
+        source_ip:
+          type: string
+        geolocation:
+          type: object
+          properties:
+            country:
+              type: string
+            region:
+              type: string
+            city:
+              type: string
+        risk_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        blocked:
+          type: boolean
+        user_notified:
+          type: boolean
+
+    AuthenticationEventPayload:
+      type: object
+      required:
+        - event_type
+        - action_type
+        - success
+      properties:
+        event_type:
+          type: string
+          const: authentication
+        action_type:
+          type: string
+          enum: [login, logout, password_reset, password_change, mfa_setup, mfa_verify]
+        success:
+          type: boolean
+        method:
+          type: string
+          enum: [password, oauth, sso, api_key, token]
+        two_factor_used:
+          type: boolean
+        source_ip:
+          type: string
+        user_agent:
+          type: string
+        device_fingerprint:
+          type: string
+        session_duration:
+          type: integer
+          description: Expected session duration in seconds
+
+    AccessEventPayload:
+      type: object
+      required:
+        - event_type
+        - resource_type
+        - resource_id
+        - access_type
+        - authorized
+      properties:
+        event_type:
+          type: string
+          const: access
+        resource_type:
+          type: string
+          enum: [project, task, file, user, system, api]
+        resource_id:
+          type: string
+        access_type:
+          type: string
+          enum: [read, write, delete, execute, download, share]
+        permissions_granted:
+          type: array
+          items:
+            type: string
+        project_id:
+          type: string
+          format: uuid
+        authorized:
+          type: boolean
+        denied_reason:
+          type: string
+
+    AuditEventPayload:
+      type: object
+      required:
+        - event_type
+        - action_type
+        - target_resource
+      properties:
+        event_type:
+          type: string
+          const: audit
+        action_type:
+          type: string
+          enum: [create, update, delete, permission_change, role_change, config_change]
+        target_resource:
+          type: string
+          enum: [user, project, task, file, system, setting]
+        target_id:
+          type: string
+        changes:
+          type: object
+          additionalProperties: true
+        justification:
+          type: string
+        approval_required:
+          type: boolean
+        approved_by:
+          type: string
+          format: uuid
+
+    FeatureAdoptionPayload:
+      type: object
+      required:
+        - event_type
+        - feature_name
+        - adoption_type
+      properties:
+        event_type:
+          type: string
+          const: feature_adoption
+        feature_name:
+          type: string
+        adoption_type:
+          type: string
+          enum: [first_use, regular_use, power_use, abandoned]
+        feature_version:
+          type: string
+        days_since_signup:
+          type: integer
+        onboarding_step:
+          type: string
+        discovery_method:
+          type: string
+          enum: [tutorial, tooltip, documentation, experimentation, support]
+        usage_depth:
+          type: string
+          enum: [basic, intermediate, advanced]
+
+    UserFeedbackPayload:
+      type: object
+      required:
+        - event_type
+        - feedback_type
+      properties:
+        event_type:
+          type: string
+          const: user_feedback
+        feedback_type:
+          type: string
+          enum: [feature_rating, nps_score, support_ticket, bug_report, feature_request]
+        feature_name:
+          type: string
+        rating:
+          type: integer
+        scale:
+          type: integer
+        comment:
+          type: string
+        feedback_channel:
+          type: string
+          enum: [in_app_survey, email_survey, support_chat, user_interview]
+        prompted:
+          type: boolean
+
+    ExperimentEventPayload:
+      type: object
+      required:
+        - event_type
+        - action_type
+        - experiment_id
+        - variant
+      properties:
+        event_type:
+          type: string
+          const: experiment
+        action_type:
+          type: string
+          enum: [exposure, conversion, goal_completion]
+        experiment_id:
+          type: string
+        variant:
+          type: string
+          enum: [control, treatment, treatment_a, treatment_b]
+        hypothesis:
+          type: string
+        allocation_key:
+          type: string
+          enum: [user_id, session_id, device_id]
+        traffic_allocation:
+          type: integer
+          minimum: 0
+          maximum: 100
+
+    OnboardingEventPayload:
+      type: object
+      required:
+        - event_type
+        - action_type
+        - step_name
+      properties:
+        event_type:
+          type: string
+          const: onboarding
+        action_type:
+          type: string
+          enum: [step_started, step_completed, step_skipped, onboarding_completed, onboarding_abandoned]
+        step_name:
+          type: string
+        step_number:
+          type: integer
+        total_steps:
+          type: integer
+        time_spent:
+          type: integer
+          description: Time spent on step in seconds
+        completion_rate:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+        drop_off_point:
+          type: string
+
+    RealTimeMetricsPayload:
+      type: object
+      required:
+        - event_type
+        - metric_name
+        - metric_value
+        - time_window
+        - aggregation_type
+      properties:
+        event_type:
+          type: string
+          const: real_time_metrics
+        metric_name:
+          type: string
+        metric_value:
+          type: number
+        time_window:
+          type: string
+          enum: [1m, 5m, 15m, 1h]
+        aggregation_type:
+          type: string
+          enum: [count, sum, avg, min, max, p50, p95, p99]
+        dimensions:
+          type: object
+          additionalProperties:
+            type: string
+
+    KPIUpdatePayload:
+      type: object
+      required:
+        - event_type
+        - kpi_name
+        - current_value
+      properties:
+        event_type:
+          type: string
+          const: kpi_update
+        kpi_name:
+          type: string
+        current_value:
+          type: number
+        previous_value:
+          type: number
+        change_percentage:
+          type: number
+          format: float
+        target_value:
+          type: number
+        period:
+          type: string
+          enum: [daily, weekly, monthly, quarterly, yearly]
+        status:
+          type: string
+          enum: [on_track, behind, ahead, at_risk]
+
+    AlertThresholdPayload:
+      type: object
+      required:
+        - event_type
+        - metric_name
+        - current_value
+        - threshold_value
+        - alert_level
+      properties:
+        event_type:
+          type: string
+          const: alert_threshold
+        metric_name:
+          type: string
+        current_value:
+          type: number
+        threshold_value:
+          type: number
+        alert_level:
+          type: string
+          enum: [info, warning, error, critical]
+        duration:
+          type: integer
+          description: Duration of threshold breach in seconds
+        service_name:
+          type: string
+        auto_resolve:
+          type: boolean
+        resolution_time:
+          type: integer
+          description: Time to resolution in seconds
+
+tags:
+  - name: User Analytics
+    description: User behavior and engagement tracking
+  - name: System Metrics
+    description: System performance and health monitoring
+  - name: Business Intelligence
+    description: Revenue and business metrics
+  - name: Security Analytics
+    description: Security events and threat detection
+  - name: Product Analytics
+    description: Product usage and feature adoption
+  - name: Real-time Processing
+    description: Real-time metrics and alerts
+
+externalDocs:
+  description: Analytics Documentation
+  url: https://docs.company.com/analytics

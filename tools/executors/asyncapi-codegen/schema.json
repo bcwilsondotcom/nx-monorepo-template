@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "title": "AsyncAPI Code Generator",
+  "description": "Generate code from AsyncAPI specifications",
+  "type": "object",
+  "properties": {
+    "spec": {
+      "type": "string",
+      "description": "Path to the AsyncAPI specification file"
+    },
+    "output": {
+      "type": "string",
+      "description": "Output directory for generated code"
+    },
+    "template": {
+      "type": "string",
+      "description": "AsyncAPI template to use",
+      "examples": [
+        "@asyncapi/nodejs-template",
+        "@asyncapi/typescript-nats-template",
+        "@asyncapi/python-paho-template",
+        "@asyncapi/java-spring-template"
+      ]
+    },
+    "parameters": {
+      "type": "object",
+      "description": "Parameters to pass to the template"
+    }
+  },
+  "required": ["spec", "output", "template"]
+}
