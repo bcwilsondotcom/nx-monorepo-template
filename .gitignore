@@ -21,6 +21,26 @@ out/
 .dynamodb/
 .tern-port
 
+# TypeScript compilation outputs in source directories
+# Ignore compiled files but keep TypeScript sources
+**/*.js
+**/*.d.ts
+**/*.js.map
+**/*.d.ts.map
+# But allow config files
+!*.config.js
+!jest.config.js
+!jest.preset.js
+!jest.setup.js
+!*.setup.js
+!vite.config.js
+!vitest.config.js
+!tailwind.config.js
+!postcss.config.js
+!next.config.js
+!webpack.config.js
+!rollup.config.js
+
 # Testing
 coverage/
 .nyc_output/

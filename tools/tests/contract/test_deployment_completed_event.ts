@@ -50,10 +50,7 @@ describe('deployment.completed event', () => {
         metrics: {
           deploymentTime: 180000,
           healthCheckTime: 30000,
-          dnsPropa
-
-
-gationTime: 45000,
+          dnsPropagationTime: 45000,
           rollbackTime: null
         },
         performance: {
