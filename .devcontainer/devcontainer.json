@@ -16,7 +16,7 @@
   "features": {
     // Node.js runtime - Essential for JavaScript/TypeScript development
     // Includes npm and common build tools. PNPM is configured separately
-    "ghcr.io/devcontainers/features/node:1": {},
+    "ghcr.io/devcontainers/features/node:2": {},
 
     // NX - Enterprise-grade monorepo build system
     // Provides intelligent build caching, distributed task execution, and dependency graph visualization
